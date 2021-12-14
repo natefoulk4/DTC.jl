@@ -1,16 +1,7 @@
 
 using LinearAlgebra, Statistics, Distributions
 
-import Base: +, *
-
-
-function +(spinorA::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}}, spinorB::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    for i in 1:length(spinorA[2])
-        spinorA[2][i] += spinorB[2][i]
-    end
-    return spinorA        
-end
-function initialize(spins, coeffs)
+function initialize(spins::Vector{Vector{Int64}}, coeffs::Vector{ComplexF64})
     L = length(spins[1])
     zeroSpinor = ( [(reverse(digits(i, base=2, pad=L))) for i in 0:2^L-1], zeros(ComplexF64, 2^L) )
     for i in 1:length(spins)
@@ -20,156 +11,82 @@ function initialize(spins, coeffs)
             end
         end
     end
-    return zeroSpinor
+    return zeroSpinor[2]
 end
-function bubblesort(spinor) # Not great, but no heap allocations!
-    for i in 1:length(spinor[1])
-        for j in i:length(spinor[1])
-            if spinor[1][i] > spinor[1][j]
-                spinor[1][i], spinor[1][j] = spinor[1][j], spinor[1][i]
-                spinor[2][i], spinor[2][j] = spinor[2][j], spinor[2][i]
-            end
+
+function σx(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+    L = Int(log2(length(spinArray)))
+    stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
+    stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+
+    for i in 1:stride2
+        for j in 1:stride
+           newArray[2*(i-1)*stride+j], newArray[2*(i-1)*stride+j + stride] = spinArray[2*(i-1)*stride+j + stride], spinArray[2*(i-1)*stride+j]
         end
     end
-    return spinor
-end
-function *(spinorA::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}}, spinorB::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    result = 0.0
-    for i in 1:length(spinorA[2])
-        result += conj(spinorA[2][i])*spinorB[2][i]
-    end
-    return round(result,digits=10)
-end
-function normalize!(spinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    mag = sqrt(spinor*spinor)
-    for i in 1:length(spinor.coefficients)
-        spinor.coefficients[i] = spinor.coefficients[i]/mag
-    end #spinor on left is already daggered. See *(::Spinor,::Spinor)
+
+    return newArray
 end
 
-function *(α::Any, spinorB::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}}) 
-    for i in 1:length(spinorB[2])
-        spinorB[2][i] *= α
-    end
-    return spinorB
-end
-*(spinorB::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}}, α::Any) = α*spinorB
+function σy(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+    L = Int(log2(length(spinArray)))
+    stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
+    stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
 
-#=function σx(n::Int,spinor::Spinor)
-    newspinor = deepcopy(spinor)
-    for state in newspinor.spins
-        state[n] = (state[n] + 1) % 2
-    end
-    return newspinor
-end=#
-function mycopy(s1, s2)
-    for i in 1:length(s1[1])
-        for j in 1:length(s1[1][1])
-            s1[1][i][j] = s2[1][i][j]
+    for i in 1:stride2
+        for j in 1:stride
+           newArray[2*(i-1)*stride+j], newArray[2*(i-1)*stride+j + stride] = im*spinArray[2*(i-1)*stride+j + stride], -im*spinArray[2*(i-1)*stride+j]
         end
     end
-    for i in 1:length(s1[2])
-        s1[2][i] = s2[2][i]
-    end
-    return nothing
-end
-function σx(n::Int, spinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}}, newspinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    
-    mycopy(newspinor, spinor)
-    for i in 1:length(spinor[1])
-        newspinor[1][i][n] = (spinor[1][i][n] + 1) % 2
-    end
 
-    return bubblesort(newspinor)
-end
-function σx!(n::Int, spinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    for i in 1:length(spinor[1])
-        spinor[1][i][n] = (spinor[1][i][n] + 1) % 2
-    end
-    return bubblesort(spinor)
+    return newArray
 end
 
-#=function σy(n::Int,spinor::Spinor)
-    newspinor = deepcopy(spinor)
-    for (i,state) in enumerate(newspinor.spins)
-        state[n] = (state[n] + 1) % 2
-        newspinor.coefficients[i] *= spinor.spins[i][n] == 1 ? im : -im
+function σz(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+    L = Int(log2(length(spinArray)))
+    stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
+    stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+
+    for i in 1:stride2
+        for j in 1:stride
+           newArray[2*(i-1)*stride+j], newArray[2*(i-1)*stride+j + stride] = -spinArray[2*(i-1)*stride+j], spinArray[2*(i-1)*stride+j + stride]
+        end
     end
-    return newspinor
-end=#
-function σy(n::Int, spinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}}, newspinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    mycopy(newspinor, spinor)
-    for i in 1:length(spinor[1])
-        newspinor[2][i] *= spinor[1][i][n] == 1 ? im : -im
-        newspinor[1][i][n] = (spinor[1][i][n] + 1) % 2
-    end
-    return bubblesort(newspinor)
+
+    return newArray
 end
-function σy!(n::Int, spinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    for i in 1:length(spinor[1])
-        spinor[2][i] *= spinor[1][i][n] == 1 ? im : -im
-        spinor[1][i][n] = (spinor[1][i][n] + 1) % 2
-    end
-    return bubblesort(spinor)
-end
-#=function σz(n::Int,spinor::Spinor)
-    newspinor = deepcopy(spinor)
-    for i in 1:length(newspinor.coefficients)
-        newspinor.coefficients[i] *= ((spinor.spins[i][n] == 1) ? 1 : -1)
-    end
-    return newspinor
-end=#
-function σz(n::Int,spinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}}, newspinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    mycopy(newspinor, spinor)
-    for i in 1:length(spinor[1])
-        newspinor[2][i] *= ((spinor[1][i][n] == 1) ? 1 : -1)
-    end
-    return newspinor
-end
-function σz!(n::Int, spinor::Tuple{Vector{Vector{Int64}}, Vector{ComplexF64}})
-    for i in 1:length(spinor[2])
-        spinor[2][i] *= ((spinor[1][i][n] == 1) ? 1 : -1)
-    end
-    return spinor
-end
-#=σiσj(i,j,spinor::Spinor) = σx(i,σx(j, spinor)) + σy(i,σy(j, spinor)) + σz(i,σz(j, spinor))
-σiσj(i,j,spinor::Spinor, theta) = theta*σx(i,σx(j, spinor)) + theta*σy(i,σy(j, spinor)) + σz(i,σz(j, spinor))=#
 function efficσiσj(i,j, spinor1, spinor2, spinor3, theta) # spinor2 and 3 just need to be the same size
-    mycopy(spinor2,spinor1)
+    
     if theta != 0.0
-        σx!(i,σx!(j,spinor2))
-        mycopy(spinor3,theta*spinor2)
-        mycopy(spinor2,spinor1)
-        σy!(i, σy!(j, spinor2))
-        spinor3 += theta*spinor2
-        mycopy(spinor2,spinor1)
-        σz!(i,σz!(j, spinor2))
-        spinor3 += spinor2
+        σx(i,σx(j,spinor1, spinor2),spinor2)
+        for i in 1:length(spinor3) 
+            spinor3[i] = theta*spinor2[i]
+        end
+        
+        σy(i,σy(j,spinor1, spinor2),spinor2)
+        for i in 1:length(spinor3) 
+            spinor3[i] += theta*spinor2[i]
+        end
+
+        σz(i,σz(j,spinor1, spinor2),spinor2)
+        for i in 1:length(spinor3) 
+            spinor3[i] += spinor2[i]
+        end
     else
-        σz!(i,σz!(j, spinor2))
-        mycopy(spinor3,spinor2)
+        σz(i,σz(j,spinor1, spinor2),spinor2)
+        for i in 1:length(spinor3) 
+            spinor3[i] = spinor2[i]
+        end
     end
     return spinor3
-    #return theta*σx!(i,σx!(j, spinor)) + theta*σy!(i,σy!(j, spinor)) + σz!(i,σz!(j, spinor))
 end
 
 #change getJtensor
-getBasis(L) = [ initialize([(reverse(digits(i, base=2, pad=L)))],[1]) for i in 0:2^L-1]
+getBasis(L) = [append!(zeros(ComplexF64,i),[1.0 + 0.0im],zeros(ComplexF64,2^L-i-1)) for i in 0:2^L-1]
 
-function operatorToMatrix(operator, basis)
-    mat = zeros(length(basis),length(basis))
-    for (i,spinorI) in enumerate(basis)
-        for (j,spinorJ) in enumerate(basis)
-                    mat[i, j] = (spinorI*operator(spinorJ))
-        end
-    end
-    return mat
-end
 function operatorToMatrix!(mat, operator, basis)
     for (i,spinorI) in enumerate(basis)
-        for (j,spinorJ) in enumerate(basis)
-            mat[i, j] = (spinorI*operator(spinorJ))
-        end
+        mat[:, i] = operator(spinorI)
     end
 end
 function getJtensor(L,β, theta; betaArray=[])
@@ -179,20 +96,12 @@ function getJtensor(L,β, theta; betaArray=[])
     jTensor = zeros(2^L, 2^L, Int(L*(L-1)/2))
     basis = getBasis(L)
     s2 = deepcopy(basis[1])
-    answer = deepcopy(basis[1])
+    s3 = deepcopy(basis[1])
     baseIndex = 0
     @views for k in 1:L-1
         for n in 1:L-k
             if betas[k] != 0.0
-                for (i,spinorI) in enumerate(basis)
-                    efficσiσj(n,n+k,spinorI,s2,answer,theta)
-                    for j in 1:2^L
-                        jTensor[i,j,baseIndex + n] = betas[k]*answer[2][j]
-                    end
-                    #=for (j,spinorJ) in enumerate(basis)
-                        jTensor[i,j,baseIndex + n] = (spinorI*operator(spinorJ))
-                    end=#
-                end
+                operatorToMatrix!(jTensor[:,:,baseIndex + n], x->betas[k]*efficσiσj(n,n+k,x,s2,s3,theta), basis)
             end
         end
         baseIndex += L-k
@@ -217,57 +126,6 @@ function levelspacing(vals)
         vals[i] = min(vals[i],vals[i+1])/max(vals[i],vals[i+1])
     end
     return mean(@view vals[1:end-2])
-end
-
-function getlevelspacingrat(L, J0, σj, σh, theta)
-    niters = 100
-    spac = zeros(niters)
-    for iteration in 1:niters
-        Hh = getDTCHam2(L, J0, σj, σh, theta)
-        spac[iteration] = levelspacing(eigvals(Hh))
-        #println(eigvals(Hh))
-    end
-    return mean(spac)
-end
-
-
-function getDTCHam2(L::Integer, J0::Real, σj::Real, σh::Real, theta::Real; β=0.0)
-    hs = zeros(L)
-    if σh > 0.0
-        for i in eachindex(hs)
-            hs[i] = rand(Uniform(0.0, σh))
-            #hs[i] = rand(Normal(0, σh))
-        end
-    else
-        hs[:] .= 0.0
-    end
-
-    js = zeros(Int(L*(L-1)/2))
-    if σj > 0.0
-        for i in eachindex(js)
-            #js[i] = rand(truncated(Normal(J0, σj),0.0, Inf))
-            js[i] = rand(Uniform(J0-σj, J0+σj))
-        end
-    else
-        js[:] .= J0
-    end
-
-    jTensor = getJtensor(L, β, theta)
-    hTensor = getHtensor(L);
-    
-    Hj = zeros(2^L,2^L)
-    Hh = zeros(2^L,2^L)
-    
-    for j in 1:Int(L*(L-1)/2), m in 1:2^L, n in 1:2^L
-        Hj[m,n] = Hj[m,n] + (js[j] * jTensor[m,n,j])
-    end
-    
-    for j in 1:L, m in 1:2^L, n in 1:2^L
-        Hh[m,n] = Hh[m,n] + hs[j] * hTensor[m,n,j]
-    end
-    Hh .= Hh .+ Hj
-    
-    return Hh
 end
 
 function efficientHam(Hspace, hs, js, jTensor, hTensor)
@@ -311,35 +169,25 @@ function getSpins!(ket, spinBasis, coeffs) # Clean this up
     return coeffs
 end
 
-function U1(L,ε) 
-    basis = getBasis(L)
-    s2 = deepcopy(basis[1])
-    return exp(-im .* operatorToMatrix(x->π/2*(1 - ε)*sum([σx(i,x,s2) for i in 1:L]), basis) )
-end
-function efficU1(mat, L, ε) 
-    basis = getBasis(L)
-    s2 = deepcopy(basis[1])
-    operatorToMatrix!(mat, x->π/2*(1 - ε)*sum([σx(i,x,s2) for i in 1:L]), getBasis(L))
-    return mat #exp(-im .* mat )
-end
 
 efficU2(Hspace, hs, js, jTensor, hTensor) = exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 
-U2(L, J0, sigJ, sigH; thet=1.0) = exp(-im.*getDTCHam2(L, J0, sigJ, sigH, thet))
-
-function U_levelspacing(L, ε, J0, sigJ, sigH, theta)       
-    niters=100
-    spac = zeros(niters)
-    for i in 1:niters
-        spac[i] = levelspacing(mod.(real.(round.(-im.*log.(eigvals(U1(L,ε)*U2(L, J0, sigJ, sigH; thet=theta))),digits=10)),2*pi))
+function newU1(L, ε)
+    mat = zeros(2^L,2^L)
+    basis = getBasis(L)
+    answers = deepcopy(basis)    
+    for i in 1:2^L
+        for k in 1:L
+            σx(k,basis[i],answers[k])
+        end
+        for k in 2:L 
+            answers[1] += answers[k] # This is where the allocations happen
+        end 
+        mat[:,i] .= answers[1]
     end
-    return mean(spac)
+    return round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15)
 end
-#= FIXME getDTCHam2 (efficient) =#
 
-#function averageSpin(newKet, oldKet, spinBasis)
-    
-#end
 function autocorrelator(spins, Ureal1, Ureal2, N)
     initKet = getKet(spins)
     L = length(spins)
@@ -363,25 +211,6 @@ function autocorrelator(spins, Ureal1, Ureal2, N)
     end
     #println(autoCor)
     return autoCor, moreSpins
-end
-function averageAutocorrelator(niters, nperiods, spins, ε, J0, σj, σh, t)
-    
-    L = length(spins)
-    cors = zeros(nperiods+1, niters)
-    finalCors=zeros(nperiods+1)
-    allSpins = zeros(L, nperiods+1, niters)
-    
-
-    
-    Hj = zeros(2^L,2^L)
-    Hh = zeros(2^L,2^L)
-
-    for i in 1:niters
-        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, U1(L, ε), U2(L, J0, σj , σh, thet=t), nperiods)
-    end
-    finalCors = mean(cors, dims=2)
-    allSpins[:,:,1] = mean(allSpins,dims=3)
-    return finalCors, allSpins[:,:,1]
 end
 function gethsandjs(niters, L, J0, σj, σh)
     hs = zeros(niters, L)
@@ -420,26 +249,11 @@ function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
 
     for i in 1:niters
         cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, u1, efficU2(Hspace,  hs[i,:] ,  js[i,:], jTensor, hTensor), nperiods)
+        if i % 10 == 0
+            println("Finished ",i,"th iteration")
+        end
     end
     finalCors = mean(cors, dims=2)
     allSpins[:,:,1] = mean(allSpins,dims=3)
     return finalCors, allSpins[:,:,1]
-end
-
-function newU1(L, ε)
-    mat = zeros(2^L,2^L)
-    basis = getBasis(L)
-    answers = deepcopy(basis)    
-    for i in 1:2^L
-        for k in 1:L
-            σx(k,basis[i],answers[k])
-        end
-        for k in 2:L 
-            answers[1] += answers[k] 
-        end 
-        for j in 1:2^L
-            mat[j,i] = basis[j]*answers[1]
-        end
-    end
-    return round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15)
 end

@@ -1,9 +1,9 @@
 
-using LinearAlgebra, Statistics, Distributions
+using LinearAlgebra, Statistics, Distributions, SparseArrays
 
-function initialize(spins::Vector{Vector{Int64}}, coeffs::Vector{ComplexF64})
+function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF64, Int64})
     L = length(spins[1])
-    zeroSpinor = ( [(reverse(digits(i, base=2, pad=L))) for i in 0:2^L-1], zeros(ComplexF64, 2^L) )
+    zeroSpinor = ( [(reverse(digits(i, base=2, pad=L))) for i in 0:2^L-1], spzeros(ComplexF64, 2^L) )
     for i in 1:length(spins)
         for j in 1:length(zeroSpinor[1])
             if spins[i] == zeroSpinor[1][j]
@@ -13,8 +13,7 @@ function initialize(spins::Vector{Vector{Int64}}, coeffs::Vector{ComplexF64})
     end
     return zeroSpinor[2]
 end
-
-function σx(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+function σx(n::Int, spinArray::SparseVector{ComplexF64, Int64}, newArray::SparseVector{ComplexF64, Int64})
     L = Int(log2(length(spinArray)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
     stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
@@ -28,7 +27,7 @@ function σx(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64}
     return newArray
 end
 
-function σy(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+function σy(n::Int, spinArray::SparseVector{ComplexF64, Int64}, newArray::SparseVector{ComplexF64, Int64})
     L = Int(log2(length(spinArray)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
     stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
@@ -42,7 +41,7 @@ function σy(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64}
     return newArray
 end
 
-function σz(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+function σz(n::Int, spinArray::SparseVector{ComplexF64, Int64}, newArray::SparseVector{ComplexF64, Int64})
     L = Int(log2(length(spinArray)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
     stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
@@ -55,6 +54,7 @@ function σz(n::Int, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64}
 
     return newArray
 end
+
 function efficσiσj(i,j, spinor1, spinor2, spinor3, theta) # spinor2 and 3 just need to be the same size
     
     if theta != 0.0
@@ -79,10 +79,16 @@ function efficσiσj(i,j, spinor1, spinor2, spinor3, theta) # spinor2 and 3 just
         end
     end
     return spinor3
+    #return theta*σx!(i,σx!(j, spinor)) + theta*σy!(i,σy!(j, spinor)) + σz!(i,σz!(j, spinor))
 end
-
 #change getJtensor
-getBasis(L) = [append!(zeros(ComplexF64,i),[1.0 + 0.0im],zeros(ComplexF64,2^L-i-1)) for i in 0:2^L-1]
+function getBasis(L) 
+    bas = [spzeros(ComplexF64,2^L) for i in 1:2^L]
+    for i in 1:2^L
+        bas[i][i] = 1.0 + 0.0im
+    end
+    return bas
+end
 
 function operatorToMatrix!(mat, operator, basis)
     for (i,spinorI) in enumerate(basis)
@@ -127,7 +133,6 @@ function levelspacing(vals)
     end
     return mean(@view vals[1:end-2])
 end
-
 function efficientHam(Hspace, hs, js, jTensor, hTensor)
   
     L = Int(log2(size(Hspace)[1]))
@@ -147,7 +152,7 @@ end
 function getKet(spinArray)
     L = length(spinArray)
     spinBasis=[reverse(digits(i, base=2, pad=length(spinArray))) for i in 0:2^length(spinArray)-1]
-    coeffs = zeros(2^L)
+    coeffs = spzeros(2^L)
     for i in eachindex(spinBasis)
         coeffs[i] = spinBasis[i] == spinArray ? 1.0 : 0.0
     end
@@ -170,7 +175,10 @@ function getSpins!(ket, spinBasis, coeffs) # Clean this up
 end
 
 
-efficU2(Hspace, hs, js, jTensor, hTensor) = exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
+function efficU2(Hspace, hs, js, jTensor, hTensor) 
+    return sparse(exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor)))
+    #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
+end
 
 function newU1(L, ε)
     mat = zeros(2^L,2^L)
@@ -185,7 +193,8 @@ function newU1(L, ε)
         end 
         mat[:,i] .= answers[1]
     end
-    return round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15)
+    return sparse(round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15))
+    #return round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15)
 end
 
 function autocorrelator(spins, Ureal1, Ureal2, N)
@@ -197,7 +206,7 @@ function autocorrelator(spins, Ureal1, Ureal2, N)
     autoCor = zeros(N+1)
     moreSpins = zeros(L,N+1)
     currentKet = deepcopy(initKet)
-    newKet = zeros(2^L)
+    newKet = spzeros(2^L)
 
     autoCor[1] = 1.0
     moreSpins[:,1] = negOneSpins

@@ -1,5 +1,5 @@
 
-using LinearAlgebra, Statistics, Distributions, SparseArrays, Arpack
+using LinearAlgebra, Statistics, Distributions, SparseArrays
 
 function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF64, Int64})
     L = length(spins[1])
@@ -95,8 +95,12 @@ function operatorToMatrix!(mat, operator, basis)
         mat[:, i] = operator(spinorI)
     end
 end
-function getJtensor(L,β, theta; betaArray=[])
-    betas = betaArray == [] ? [β^i for i in 0:L-2] : betaArray
+function getJtensor(L,β::Float64, theta; betaArray=zeros(Float64, L))
+    if maximum(betaArray) == 0.0
+         betas = [β^i for i in 0:L-2]
+    else
+        betas = betaArray
+    end
     length(betas) != L-1 ? error("betaArray is wrong length.") : nothing
 
     jTensor = zeros(2^L, 2^L, Int(L*(L-1)/2))
@@ -134,19 +138,16 @@ function levelspacing(vals)
     return mean(@view vals[1:end-2])
 end
 function efficientHam(Hspace, hs, js, jTensor, hTensor)
-  
     L = Int(log2(size(Hspace)[1]))
     for i in 1:2^L, j in 1:2^L
         Hspace[i,j] = 0.0 + 0.0im
     end
-    for j in 1:L, m in 1:2^L, n in 1:2^L
-        Hspace[m,n] += (js[j] * jTensor[m,n,j]) + hs[j] * hTensor[m,n,j]
+    for m in 1:2^L, n in 1:2^L, j in 1:(L-1)#1:Int(L*(L-1)/2)
+        Hspace[m,n] += (js[j] * jTensor[m,n,j])
     end
-    #=
-    for j in 1:L, m in 1:2^L, n in 1:2^L
+    for m in 1:2^L, n in 1:2^L, j in 1:L 
         Hspace[m,n] += hs[j] * hTensor[m,n,j]
     end
-    =#
     return Hspace
 end
 function getKet(spinArray)
@@ -161,7 +162,7 @@ function getKet(spinArray)
     return coeffs
 end
 function getSpins!(ket, spinBasis, spinMatrix, ind) # Clean this up
-   for i in size(spinBasis)[1]
+   for i in 1:size(spinBasis)[1]
         for j in 1:size(spinBasis)[2]
             spinMatrix[j,ind] += abs2(ket[i])*spinBasis[i,j]
         end
@@ -170,35 +171,20 @@ function getSpins!(ket, spinBasis, spinMatrix, ind) # Clean this up
 end
 
 
+function IsingefficU2(Hspace, hs, js, jTensor, hTensor) 
+    efficientHam(Hspace, hs, js, jTensor, hTensor)
+    for i in 1:size(Hspace)[1]
+        Hspace[i,i] = exp(-im*Hspace[i,i])
+    end
+    return Hspace
+    #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
+end
+
 function efficU2(Hspace, hs, js, jTensor, hTensor) 
     return sparse(exp(-im.*Array(efficientHam(Hspace, hs, js, jTensor, hTensor))))  
     #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 end
 
-
-function HermMatExp(mat::SparseArrays.SparseMatrixCSCSymmHerm)
-    error("This function isn't written yet")
-end
-
-function sparseMatExp(mat::SparseMatrixCSC)
-    if ishermitian(mat)
-        return SparseHermMatExp(Hermitian(mat))
-    else
-        error("Matrix is not Hermitian.")
-    end
-end
-
-function HermMatExp(mat::Hermitian)
-    error("This function isn't written yet")
-end
-
-function HermMatExp(mat::Matrix)
-    if ishermitian(mat)
-        return HermMatExp(Hermitian(mat))
-    else
-        error("Matrix is not Hermitian.")
-    end
-end
 
 function newU1(L, ε)
     mat = zeros(2^L,2^L)
@@ -288,7 +274,7 @@ function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
     
     L = length(spins)
     u1 = newU1(L, ε)
-    Hspace = zeros(2^L, 2^L)
+    Hspace = zeros(ComplexF64, 2^L, 2^L)
 
     hs, js = gethsandjs(niters, L, J0, σj, σh)
 
@@ -300,7 +286,7 @@ function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
     hTensor = getHtensor(L)
 
     for i in 1:niters
-        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, u1, efficU2(Hspace,  hs[i,:] ,  js[i,:], jTensor, hTensor), nperiods)
+        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, u1, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jTensor, hTensor), nperiods)
         if i % 10 == 0
             println("Finished ",i,"th iteration")
         end

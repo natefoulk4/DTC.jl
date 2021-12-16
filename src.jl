@@ -1,5 +1,5 @@
 
-using LinearAlgebra, Statistics, Distributions, SparseArrays
+using LinearAlgebra, Statistics, Distributions, SparseArrays, Arpack
 
 function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF64, Int64})
     L = length(spins[1])
@@ -139,45 +139,65 @@ function efficientHam(Hspace, hs, js, jTensor, hTensor)
     for i in 1:2^L, j in 1:2^L
         Hspace[i,j] = 0.0 + 0.0im
     end
-    for j in 1:Int(L*(L-1)/2), m in 1:2^L, n in 1:2^L
-        Hspace[m,n] += (js[j] * jTensor[m,n,j])
+    for j in 1:L, m in 1:2^L, n in 1:2^L
+        Hspace[m,n] += (js[j] * jTensor[m,n,j]) + hs[j] * hTensor[m,n,j]
     end
-    
+    #=
     for j in 1:L, m in 1:2^L, n in 1:2^L
         Hspace[m,n] += hs[j] * hTensor[m,n,j]
     end
-    
+    =#
     return Hspace
 end
 function getKet(spinArray)
     L = length(spinArray)
     spinBasis=[reverse(digits(i, base=2, pad=length(spinArray))) for i in 0:2^length(spinArray)-1]
-    coeffs = spzeros(2^L)
+    coeffs = zeros(ComplexF64,2^L)
     for i in eachindex(spinBasis)
-        coeffs[i] = spinBasis[i] == spinArray ? 1.0 : 0.0
-    end
-    return coeffs
-end
-function getSpins!(ket, spinBasis, coeffs) # Clean this up
-    L = Int(log2(length(ket)))
-
-    #abs2ket = abs2.(ket)
-    coeffs .= 0.0
-    
-    for i in eachindex(spinBasis)
-        if ket[i] != 0.0
-            for j in 1:L
-                coeffs[j] += abs2(ket[i])*(spinBasis[i][j] == 0 ? -1.0 : 1.0)
-            end
+        if spinBasis[i] == spinArray  
+            coeffs[i] = 1.0 + 0.0im
         end
     end
     return coeffs
 end
+function getSpins!(ket, spinBasis, spinMatrix, ind) # Clean this up
+   for i in size(spinBasis)[1]
+        for j in 1:size(spinBasis)[2]
+            spinMatrix[j,ind] += abs2(ket[i])*spinBasis[i,j]
+        end
+    end
+    return nothing
+end
 
 
 function efficU2(Hspace, hs, js, jTensor, hTensor) 
-    return sparse(exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor)))
+    return sparse(exp(-im.*Array(efficientHam(Hspace, hs, js, jTensor, hTensor))))  
     #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
+end
+
+
+function HermMatExp(mat::SparseArrays.SparseMatrixCSCSymmHerm)
+    error("This function isn't written yet")
+end
+
+function sparseMatExp(mat::SparseMatrixCSC)
+    if ishermitian(mat)
+        return SparseHermMatExp(Hermitian(mat))
+    else
+        error("Matrix is not Hermitian.")
+    end
+end
+
+function HermMatExp(mat::Hermitian)
+    error("This function isn't written yet")
+end
+
+function HermMatExp(mat::Matrix)
+    if ishermitian(mat)
+        return HermMatExp(Hermitian(mat))
+    else
+        error("Matrix is not Hermitian.")
+    end
 end
 
 function newU1(L, ε)
@@ -193,29 +213,52 @@ function newU1(L, ε)
         end 
         mat[:,i] .= answers[1]
     end
-    return sparse(round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15))
-    #return round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15)
+    if ε == 0.0
+        return sparse(round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15))
+    else
+        return round.(exp(-im * mat .* (1-ε) * pi/2 ), digits=15)
+    end
 end
 
 function autocorrelator(spins, Ureal1, Ureal2, N)
     initKet = getKet(spins)
     L = length(spins)
     negOneSpins = replace(spins, 0 => -1)
-    basis = [reverse(digits(i, base=2, pad=L)) for i in 0:2^L-1]
+    basis = zeros(2^L, L)
+    for i in 1:2^L
+        basis[i,:] = Float64.(reverse(digits(i-1, base=2, pad=L)))
+    end
+    replace!(x->iszero(x) ? -1.0 : x, basis) #This basis is a matrix of the spins
+
 
     autoCor = zeros(N+1)
     moreSpins = zeros(L,N+1)
     currentKet = deepcopy(initKet)
-    newKet = spzeros(2^L)
+    interKet = similar(currentKet)
+    newKet = similar(currentKet)
 
     autoCor[1] = 1.0
     moreSpins[:,1] = negOneSpins
-
+    #println("U1 sparsity: ",length(findall(iszero,Ureal1))/prod(size(Ureal1)))
+    #println("U2 sparsity: ",length(findall(iszero,Ureal2))/prod(size(Ureal2)))
     for i in 2:N+1
-        newKet = Ureal2*Ureal1*currentKet
-        getSpins!(newKet, basis, view(moreSpins,:,i))
+        #println(typeof.([interKet,Ureal1,currentKet]))
+        #println("start: ")
+        #println(currentKet)
+        #time1 = time_ns()
+        mul!(interKet, Ureal1, currentKet)
+        #println("op1 time: ", (time_ns()-time1)/100)
+        #println("after U1: ")
+        #println(interKet)
+        #time2 = time_ns()
+        #println(typeof.([newKet,Ureal2,interKet]))
+        mul!(newKet,Ureal2,interKet)
+        #println("op2 time: ", (time_ns()-time2)/100)
+        #println("after U2: ")
+        #println(newKet)
+        getSpins!(newKet, basis, moreSpins, i)
         #autoCor[i] = mean(moreSpins[:,i].*negOneSpins)
-        autoCor[i] = (moreSpins[:,i].*negOneSpins)[Int(round(L/2))]
+        autoCor[i] = (view(moreSpins,:,i).*negOneSpins)[Int(round(L/2))]
         currentKet = newKet
     end
     #println(autoCor)

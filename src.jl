@@ -1,5 +1,6 @@
 
-using LinearAlgebra, Statistics, Distributions, SparseArrays
+using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs, Octavian
+
 
 function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF64, Int64})
     L = length(spins[1])
@@ -21,6 +22,24 @@ function σx(n::Int, spinArray::SparseVector{ComplexF64, Int64}, newArray::Spars
     for i in 1:stride2
         for j in 1:stride
            newArray[2*(i-1)*stride+j], newArray[2*(i-1)*stride+j + stride] = spinArray[2*(i-1)*stride+j + stride], spinArray[2*(i-1)*stride+j]
+        end
+    end
+
+    return newArray
+end
+function Rx(n::Int, θ::Real, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+    L = Int(log2(length(spinArray)))
+    stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
+    stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+
+    cos1 = cos(θ)
+    sin1 = sin(θ)
+
+    for i in 1:stride2
+        for j in 1:stride
+            #println(2*(i-1)*stride+j, 2*(i-1)*stride+j + stride)
+            newArray[2*(i-1)*stride+j] = cos1*spinArray[2*(i-1)*stride+j] + im*sin1*spinArray[2*(i-1)*stride+j + stride]
+            newArray[2*(i-1)*stride+j + stride]  = im*sin1*spinArray[2*(i-1)*stride+j] + cos1*spinArray[2*(i-1)*stride+j + stride]
         end
     end
 
@@ -81,7 +100,7 @@ function efficσiσj(i,j, spinor1, spinor2, spinor3, theta) # spinor2 and 3 just
     return spinor3
     #return theta*σx!(i,σx!(j, spinor)) + theta*σy!(i,σy!(j, spinor)) + σz!(i,σz!(j, spinor))
 end
-#change getJtensor
+
 function getBasis(L) 
     bas = [spzeros(ComplexF64,2^L) for i in 1:2^L]
     for i in 1:2^L
@@ -118,6 +137,18 @@ function getJtensor(L,β::Float64, theta; betaArray=zeros(Float64, L))
     end
     return jTensor
 end
+function convertToArrays(tensor)
+    smats = [sparse(tensor[:,:,i]) for i in 1:size(tensor)[3]]
+    inds = [findnz(smat) for smat in smats]
+    xs::Vector{Int64}, ys::Vector{Int64}, zs::Vector{Int64}, vs::Vector{Float64} = [], [], [], []
+    for i in 1:size(tensor)[3]
+        append!(xs, inds[i][1])
+        append!(ys, inds[i][2])
+        append!(zs, fill(i, length(inds[i][1])))
+        append!(vs, inds[i][3])
+    end
+    return xs, ys, zs, vs
+end
 function getHtensor(L)
     hTensor = zeros(2^L, 2^L, L)
     basis = getBasis(L)
@@ -137,16 +168,17 @@ function levelspacing(vals)
     end
     return mean(@view vals[1:end-2])
 end
-function efficientHam(Hspace, hs, js, jTensor, hTensor)
+function efficientHam(Hspace, hs, js, jArrays::Tuple{Vector{Int64},Vector{Int64},Vector{Int64},Vector{Float64}}, hTensor)
     L = Int(log2(size(Hspace)[1]))
+    xs,ys,zs,vs = jArrays
     for i in 1:2^L, j in 1:2^L
-        Hspace[i,j] = 0.0 + 0.0im
+        Hspace[j,i] = 0.0 + 0.0im
     end
-    for m in 1:2^L, n in 1:2^L, j in 1:(L-1)#1:Int(L*(L-1)/2)
-        Hspace[m,n] += (js[j] * jTensor[m,n,j])
+    for (i,j,k,v) in zip(xs,ys,zs,vs)
+        Hspace[i,j] += (js[k] * v)
     end
-    for m in 1:2^L, n in 1:2^L, j in 1:L 
-        Hspace[m,n] += hs[j] * hTensor[m,n,j]
+    for j in 1:L, n in 1:2^L
+        Hspace[n,n] += hs[j] * hTensor[n,n,j]
     end
     return Hspace
 end
@@ -171,12 +203,12 @@ function getSpins!(ket, spinBasis, spinMatrix, ind) # Clean this up
 end
 
 
-function IsingefficU2(Hspace, hs, js, jTensor, hTensor) 
-    efficientHam(Hspace, hs, js, jTensor, hTensor)
+function IsingefficU2(Hspace, hs, js, jArrays, hTensor) 
+    efficientHam(Hspace, hs, js, jArrays, hTensor)
     for i in 1:size(Hspace)[1]
         Hspace[i,i] = exp(-im*Hspace[i,i])
     end
-    return Hspace
+    return sparse(Hspace)
     #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 end
 
@@ -184,6 +216,9 @@ function efficU2(Hspace, hs, js, jTensor, hTensor)
     return sparse(exp(-im.*Array(efficientHam(Hspace, hs, js, jTensor, hTensor))))  
     #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 end
+
+density(mat::SparseMatrixCSC) = nnz(mat)/length(mat)
+density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 
 
 function newU1(L, ε)
@@ -194,7 +229,7 @@ function newU1(L, ε)
         for k in 1:L
             σx(k,basis[i],answers[k])
         end
-        for k in 2:L 
+        for k in 2:L
             answers[1] += answers[k] # This is where the allocations happen
         end 
         mat[:,i] .= answers[1]
@@ -206,48 +241,53 @@ function newU1(L, ε)
     end
 end
 
-function autocorrelator(spins, Ureal1, Ureal2, N)
+function betterU1(L, ε)
+    mats = [zeros(ComplexF64,2^L,2^L) for i in 1:L]
+    us = [spzeros(ComplexF64,2^L,2^L) for i in 1:L]
+    basis = getBasis(L)
+    answers = deepcopy(basis)    
+    for i in 1:2^L
+        for k in 1:L
+            σx(k,basis[i],answers[k])
+
+            mats[k][:,i] .= answers[k]
+        end
+    end
+    for i in 1:L
+        us[i] = sparse(round.(exp(-im .* mats[i] .* (1-ε) * pi/2) , digits=15))
+    end
+    return us
+end
+
+function autocorrelator(spins, basis, eps, Ureal2, N)
     initKet = getKet(spins)
     L = length(spins)
     negOneSpins = replace(spins, 0 => -1)
-    basis = zeros(2^L, L)
-    for i in 1:2^L
-        basis[i,:] = Float64.(reverse(digits(i-1, base=2, pad=L)))
-    end
-    replace!(x->iszero(x) ? -1.0 : x, basis) #This basis is a matrix of the spins
 
 
     autoCor = zeros(N+1)
     moreSpins = zeros(L,N+1)
     currentKet = deepcopy(initKet)
-    interKet = similar(currentKet)
-    newKet = similar(currentKet)
+    interKet = zeros(ComplexF64, 2^L)
+    newKet = zeros(ComplexF64, 2^L)
 
     autoCor[1] = 1.0
     moreSpins[:,1] = negOneSpins
-    #println("U1 sparsity: ",length(findall(iszero,Ureal1))/prod(size(Ureal1)))
-    #println("U2 sparsity: ",length(findall(iszero,Ureal2))/prod(size(Ureal2)))
-    for i in 2:N+1
-        #println(typeof.([interKet,Ureal1,currentKet]))
-        #println("start: ")
-        #println(currentKet)
-        #time1 = time_ns()
-        mul!(interKet, Ureal1, currentKet)
-        #println("op1 time: ", (time_ns()-time1)/100)
-        #println("after U1: ")
-        #println(interKet)
-        #time2 = time_ns()
-        #println(typeof.([newKet,Ureal2,interKet]))
-        mul!(newKet,Ureal2,interKet)
-        #println("op2 time: ", (time_ns()-time2)/100)
-        #println("after U2: ")
-        #println(newKet)
+     for i in 2:N+1
+        for k in 1:L
+            #mul!(interKet, U1s[k], currentKet)
+            Rx(k, pi/2*(1-eps), currentKet, interKet)
+            interKet, currentKet = currentKet, interKet
+        end
+
+        mul!(newKet,Ureal2,currentKet)
+    
         getSpins!(newKet, basis, moreSpins, i)
-        #autoCor[i] = mean(moreSpins[:,i].*negOneSpins)
-        autoCor[i] = (view(moreSpins,:,i).*negOneSpins)[Int(round(L/2))]
-        currentKet = newKet
+        autoCor[i] = moreSpins[Int(round(L/2)),i]*negOneSpins[Int(round(L/2))]
+
+
+        currentKet, newKet = newKet, currentKet
     end
-    #println(autoCor)
     return autoCor, moreSpins
 end
 function gethsandjs(niters, L, J0, σj, σh)
@@ -271,9 +311,7 @@ function gethsandjs(niters, L, J0, σj, σh)
     return hs, js
 end
 function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
-    
     L = length(spins)
-    u1 = newU1(L, ε)
     Hspace = zeros(ComplexF64, 2^L, 2^L)
 
     hs, js = gethsandjs(niters, L, J0, σj, σh)
@@ -283,15 +321,29 @@ function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
     finalCors=zeros(nperiods+1)
     allSpins = zeros(L, nperiods+1, niters)
     jTensor = getJtensor(L, 0.0, t) #β=0.0
+    jArrays = convertToArrays(jTensor)
     hTensor = getHtensor(L)
 
+    basis = zeros(2^L, L)
+    for i in 1:2^L
+        basis[i,:] = Float64.(reverse(digits(i-1, base=2, pad=L)))
+    end
+    replace!(x->iszero(x) ? -1.0 : x, basis) #This basis is a matrix of the spins
+    
+    #u1s = betterU1(L, ε)
+
     for i in 1:niters
-        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, u1, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jTensor, hTensor), nperiods)
+        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jArrays, hTensor), nperiods)
         if i % 10 == 0
             println("Finished ",i,"th iteration")
         end
     end
     finalCors = mean(cors, dims=2)
     allSpins[:,:,1] = mean(allSpins,dims=3)
+
     return finalCors, allSpins[:,:,1]
 end
+
+n, jz, ε, σh = 3, 0.15, 0.05, pi
+niters=1
+l=2; init=rand([0,1],l); t = [effAvgAutoCor(niters, n, init, ε, jz, 0.2*jz, σh, 0.0) for i in 1:1]; minimum(t), maximum(t)

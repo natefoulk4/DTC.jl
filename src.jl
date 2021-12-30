@@ -46,6 +46,28 @@ function Rx(n::Int, θ::Real, spinArray::Vector{ComplexF64}, newArray::Vector{Co
     return newArray
 end
 
+function getIsingNNJtensor(L)
+    diagonals = fill(1.0 + 0.0im, (2^L,L-1))
+    for n in 1:L-1
+        stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n = 2, 8 if n=1
+        halfstride = Int(stride/2)
+        stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+        #
+        # ddd ddu dud duu udd udu uud uuu
+        # 1  1  1  1 -1 -1 -1 -1 -1 -1 -1 -1  1  1  1  1   8,1   N=1 [5-12]
+        # 1  1 -1 -1 -1 -1  1  1  1  1 -1 -1 -1 -1  1  1   2,2   N=2 [3-6], [11-14]
+        # 1 -1 -1  1  1 -1 -1  1  1 -1 -1  1  1 -1 -1  1   1,4   N=3 [2-3], [6-7], [10-11], [14-15]
+        #
+        for i in 1:stride2
+            for j in 1:stride
+                diagonals[2*(i-1)*stride + halfstride + j, n] *= -1.0
+            end
+        end
+    end
+
+    return diagonals
+end
+
 function σy(n::Int, spinArray::SparseVector{ComplexF64, Int64}, newArray::SparseVector{ComplexF64, Int64})
     L = Int(log2(length(spinArray)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
@@ -150,11 +172,16 @@ function convertToArrays(tensor)
     return xs, ys, zs, vs
 end
 function getHtensor(L)
-    hTensor = zeros(2^L, 2^L, L)
-    basis = getBasis(L)
-    s2 = deepcopy(basis[1])
-    @views for n in 1:L
-            operatorToMatrix!(hTensor[:,:,n], x->σz(n,x,s2), basis)
+    hTensor = fill(1.0+0.0im, (2^L, L))
+    for n in 1:L    
+        stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
+        stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+    
+        for i in 1:stride2
+            for j in 1:stride
+               hTensor[2*(i-1)*stride+j, n] = -1.0+0.0im
+            end
+        end
     end
     return hTensor
 end
@@ -168,17 +195,16 @@ function levelspacing(vals)
     end
     return mean(@view vals[1:end-2])
 end
-function efficientHam(Hspace, hs, js, jArrays::Tuple{Vector{Int64},Vector{Int64},Vector{Int64},Vector{Float64}}, hTensor)
+function efficientHam(Hspace, hs, js, jMat, hTensor)
     L = Int(log2(size(Hspace)[1]))
-    xs,ys,zs,vs = jArrays
-    for i in 1:2^L, j in 1:2^L
-        Hspace[j,i] = 0.0 + 0.0im
+    for i in 1:2^L
+        Hspace[i,i] = 0.0 + 0.0im
     end
-    for (i,j,k,v) in zip(xs,ys,zs,vs)
-        Hspace[i,j] += (js[k] * v)
+    for j in 1:L-1, n in 1:2^L
+        Hspace[n,n] += (js[j] * jMat[n,j])
     end
     for j in 1:L, n in 1:2^L
-        Hspace[n,n] += hs[j] * hTensor[n,n,j]
+        Hspace[n,n] += hs[j] * hTensor[n,j]
     end
     return Hspace
 end
@@ -208,7 +234,7 @@ function IsingefficU2(Hspace, hs, js, jArrays, hTensor)
     for i in 1:size(Hspace)[1]
         Hspace[i,i] = exp(-im*Hspace[i,i])
     end
-    return sparse(Hspace)
+    return Hspace
     #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 end
 
@@ -312,7 +338,7 @@ function gethsandjs(niters, L, J0, σj, σh)
 end
 function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
     L = length(spins)
-    Hspace = zeros(ComplexF64, 2^L, 2^L)
+    Hspace = spzeros(ComplexF64, 2^L, 2^L)
 
     hs, js = gethsandjs(niters, L, J0, σj, σh)
 
@@ -320,9 +346,10 @@ function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
     cors = zeros(nperiods+1, niters)
     finalCors=zeros(nperiods+1)
     allSpins = zeros(L, nperiods+1, niters)
-    jTensor = getJtensor(L, 0.0, t) #β=0.0
-    jArrays = convertToArrays(jTensor)
-    hTensor = getHtensor(L)
+    jIsingTensor = getIsingNNJtensor(L)
+    #jTensor = getJtensor(L, 0.0, t)    # most of the time
+    #jArrays = convertToArrays(jTensor) # also most of the tim
+    hTensor = getHtensor(L)            # more of the time
 
     basis = zeros(2^L, L)
     for i in 1:2^L
@@ -333,7 +360,7 @@ function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
     #u1s = betterU1(L, ε)
 
     for i in 1:niters
-        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jArrays, hTensor), nperiods)
+        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor), nperiods)
         if i % 10 == 0
             println("Finished ",i,"th iteration")
         end

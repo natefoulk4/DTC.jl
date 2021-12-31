@@ -1,7 +1,7 @@
 
-using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs, Octavian
+using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs
 
-
+const to = TimerOutput()
 function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF64, Int64})
     L = length(spins[1])
     zeroSpinor = ( [(reverse(digits(i, base=2, pad=L))) for i in 0:2^L-1], spzeros(ComplexF64, 2^L) )
@@ -27,7 +27,7 @@ function σx(n::Int, spinArray::SparseVector{ComplexF64, Int64}, newArray::Spars
 
     return newArray
 end
-function Rx(n::Int, θ::Real, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
+@timeit to function Rx(n::Int, θ::Real, spinArray::Vector{ComplexF64}, newArray::Vector{ComplexF64})
     L = Int(log2(length(spinArray)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
     stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
@@ -46,7 +46,7 @@ function Rx(n::Int, θ::Real, spinArray::Vector{ComplexF64}, newArray::Vector{Co
     return newArray
 end
 
-function getIsingNNJtensor(L)
+@timeit to function getIsingNNJtensor(L)
     diagonals = fill(1.0 + 0.0im, (2^L,L-1))
     for n in 1:L-1
         stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n = 2, 8 if n=1
@@ -195,7 +195,7 @@ function levelspacing(vals)
     end
     return mean(@view vals[1:end-2])
 end
-function efficientHam(Hspace, hs, js, jMat, hTensor)
+@timeit to function efficientHam(Hspace, hs, js, jMat, hTensor)
     L = Int(log2(size(Hspace)[1]))
     for i in 1:2^L
         Hspace[i,i] = 0.0 + 0.0im
@@ -219,7 +219,7 @@ function getKet(spinArray)
     end
     return coeffs
 end
-function getSpins!(ket, spinBasis, spinMatrix, ind) # Clean this up
+@timeit to function getSpins!(ket, spinBasis, spinMatrix, ind)
    for i in 1:size(spinBasis)[1]
         for j in 1:size(spinBasis)[2]
             spinMatrix[j,ind] += abs2(ket[i])*spinBasis[i,j]
@@ -229,7 +229,7 @@ function getSpins!(ket, spinBasis, spinMatrix, ind) # Clean this up
 end
 
 
-function IsingefficU2(Hspace, hs, js, jArrays, hTensor) 
+@timeit to function IsingefficU2(Hspace, hs, js, jArrays, hTensor) 
     efficientHam(Hspace, hs, js, jArrays, hTensor)
     for i in 1:size(Hspace)[1]
         Hspace[i,i] = exp(-im*Hspace[i,i])
@@ -285,7 +285,7 @@ function betterU1(L, ε)
     return us
 end
 
-function autocorrelator(spins, basis, eps, Ureal2, N)
+@timeit to function autocorrelator(spins, basis, eps, Ureal2, N)
     initKet = getKet(spins)
     L = length(spins)
     negOneSpins = replace(spins, 0 => -1)
@@ -306,7 +306,7 @@ function autocorrelator(spins, basis, eps, Ureal2, N)
             interKet, currentKet = currentKet, interKet
         end
 
-        mul!(newKet,Ureal2,currentKet)
+        @timeit to "U2 mul" mul!(newKet,Ureal2,currentKet)
     
         getSpins!(newKet, basis, moreSpins, i)
         autoCor[i] = moreSpins[Int(round(L/2)),i]*negOneSpins[Int(round(L/2))]
@@ -336,7 +336,7 @@ function gethsandjs(niters, L, J0, σj, σh)
     end
     return hs, js
 end
-function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
+@timeit to function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
     L = length(spins)
     Hspace = spzeros(ComplexF64, 2^L, 2^L)
 
@@ -370,7 +370,3 @@ function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
 
     return finalCors, allSpins[:,:,1]
 end
-
-n, jz, ε, σh = 3, 0.15, 0.05, pi
-niters=1
-l=2; init=rand([0,1],l); t = [effAvgAutoCor(niters, n, init, ε, jz, 0.2*jz, σh, 0.0) for i in 1:1]; minimum(t), maximum(t)

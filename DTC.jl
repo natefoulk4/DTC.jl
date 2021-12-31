@@ -17,3 +17,46 @@ function plotter(realres, spinmap)
     p4 = heatmap(collect(howitsgoing), collect(1:length(init)), spinmap[:,howitsgoing], c=:viridis, clims=(-1,1))#print(spinmap[:,1001:1030])
     plot(p1,p21, p3, p4, layout=l)
 end
+
+plotter(x::Tuple) = plotter(x[1], x[2])
+
+function savedata(filename, output::Tuple)
+    realres, spinmap = output
+    open(filename, "w") do f
+        # do realres
+        write(f, Int64(length(realres)))
+        for i in eachindex(realres)
+            write(f, Float64(realres[i]))
+        end
+
+        # do spinmap
+        write(f, Int64(size(spinmap)[1]))
+        write(f, Int64(size(spinmap)[2]))
+        for i in eachindex(spinmap)
+            write(f, Float64(spinmap[i]))
+        end
+
+    end
+    return nothing
+end
+
+function readdata(filename)
+    open(filename, "r") do f
+        # do realres
+        n = read(f, Int64)
+        realres = zeros(Float64, n)
+        for i in eachindex(realres)
+            realres[i] = read(f, Float64)
+        end
+
+        # do spinmap
+        m = read(f, Int64)
+        n = read(f, Int64)
+        spinmap = zeros(Float64, (m,n))
+        for i in eachindex(spinmap)
+            spinmap[i] = read(f, Float64)
+        end
+
+        return realres, spinmap
+    end
+end

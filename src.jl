@@ -47,16 +47,22 @@ end
 end
 
 @timeit to function getIsingNNJtensor(L)
-    diagonals = fill(1.0 + 0.0im, (2^L,L-1))
-    for n in 1:L-1
+    diagonals = fill(1.0 + 0.0im, (2^L,L))
+    for n in 1:L # n is the nth exchange coupling (J_{n, n+1})
         stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n = 2, 8 if n=1
-        halfstride = Int(stride/2)
+        halfstride = Int(round(stride/2))
         stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
-        #
+        # L = 3 
         # ddd ddu dud duu udd udu uud uuu
-        # 1  1  1  1 -1 -1 -1 -1 -1 -1 -1 -1  1  1  1  1   8,1   N=1 [5-12]
-        # 1  1 -1 -1 -1 -1  1  1  1  1 -1 -1 -1 -1  1  1   2,2   N=2 [3-6], [11-14]
-        # 1 -1 -1  1  1 -1 -1  1  1 -1 -1  1  1 -1 -1  1   1,4   N=3 [2-3], [6-7], [10-11], [14-15]
+        # 1  1 -1 -1 -1 -1  1  1   4,2,1   N=1 [5-12]
+        # 1 -1 -1  1  1 -1 -1  1   2,1,2   N=2 [3-6], [11-14]
+        # 1 -1  1 -1 -1  1 -1  1   1,1,4   N=3 [2-3], [6-7], [10-11], [14-15]
+        # L = 4
+        # dddd dddu ddud dduu dudd dudu duud duuu uddd ....
+        # 1  1  1  1 -1 -1 -1 -1 -1 -1 -1 -1  1  1  1  1   8,4,1   N=1 [5-12]
+        # 1  1 -1 -1 -1 -1  1  1  1  1 -1 -1 -1 -1  1  1   4,2,2   N=2 [5-12]
+        # 1 -1 -1  1  1 -1 -1  1  1 -1 -1  1  1 -1 -1  1   2,1,4   N=3 [3-6], [11-14]
+        # 1 -1  1 -1  1 -1  1 -1 -1  1 -1  1 -1  1 -1  1   1,1,8   N=4 [2-3], [6-7], [10-11], [14-15]
         #
         for i in 1:stride2
             for j in 1:stride
@@ -64,6 +70,9 @@ end
             end
         end
     end
+
+    #Fix the n=L case
+    diagonals[1:2^(L-1), L] *= -1.0
 
     return diagonals
 end
@@ -185,7 +194,7 @@ function getHtensor(L)
     end
     return hTensor
 end
-function levelspacing(vals)
+@timeit to function levelspacing(vals)
     sort!(vals)
     for i in 1:length(vals)-1
         vals[i] = vals[i+1] - vals[i]
@@ -193,19 +202,27 @@ function levelspacing(vals)
     for i in 1:length(vals)-2
         vals[i] = min(vals[i],vals[i+1])/max(vals[i],vals[i+1])
     end
-    return mean(@view vals[1:end-2])
+    return mean(vals[1:end-2])
 end
-@timeit to function efficientHam(Hspace, hs, js, jMat, hTensor)
+@timeit to function efficientHam(Hspace, hs, js, jMat, hTensor; BCs)
     L = Int(log2(size(Hspace)[1]))
     for i in 1:2^L
         Hspace[i,i] = 0.0 + 0.0im
     end
-    for j in 1:L-1, n in 1:2^L
-        Hspace[n,n] += (js[j] * jMat[n,j])
+    if BCs == "open"
+        for j in 1:L-1, n in 1:2^L
+            Hspace[n,n] += (js[j] * jMat[n,j])
+        end
+    elseif BCs == "periodic"
+        for j in 1:L, n in 1:2^L
+            Hspace[n,n] += (js[j] * jMat[n,j])
+        end
     end
     for j in 1:L, n in 1:2^L
         Hspace[n,n] += hs[j] * hTensor[n,j]
     end
+    #show(stdout,"text/plain", js[1:L])
+    #show(stdout,"text/plain", jMat)
     return Hspace
 end
 function getKet(spinArray)
@@ -220,8 +237,8 @@ function getKet(spinArray)
     return coeffs
 end
 @timeit to function getSpins!(ket, spinBasis, spinMatrix, ind)
-   for i in 1:size(spinBasis)[1]
-        for j in 1:size(spinBasis)[2]
+   for i in 1:size(spinBasis)[1] #2^L
+        for j in 1:size(spinBasis)[2] #L
             spinMatrix[j,ind] += abs2(ket[i])*spinBasis[i,j]
         end
     end
@@ -229,8 +246,8 @@ end
 end
 
 
-@timeit to function IsingefficU2(Hspace, hs, js, jArrays, hTensor) 
-    efficientHam(Hspace, hs, js, jArrays, hTensor)
+@timeit to function IsingefficU2(Hspace, hs, js, jArrays, hTensor; BCs="open") 
+    efficientHam(Hspace, hs, js, jArrays, hTensor; BCs=BCs)
     for i in 1:size(Hspace)[1]
         Hspace[i,i] = exp(-im*Hspace[i,i])
     end
@@ -239,7 +256,7 @@ end
 end
 
 function efficU2(Hspace, hs, js, jTensor, hTensor) 
-    return sparse(exp(-im.*Array(efficientHam(Hspace, hs, js, jTensor, hTensor))))  
+    return exp(-im.*Array(efficientHam(Hspace, hs, js, jTensor, hTensor)))
     #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 end
 
@@ -247,7 +264,7 @@ density(mat::SparseMatrixCSC) = nnz(mat)/length(mat)
 density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 
 
-function newU1(L, ε)
+@timeit to function newU1(L, ε)
     mat = zeros(2^L,2^L)
     basis = getBasis(L)
     answers = deepcopy(basis)    
@@ -267,37 +284,19 @@ function newU1(L, ε)
     end
 end
 
-function betterU1(L, ε)
-    mats = [zeros(ComplexF64,2^L,2^L) for i in 1:L]
-    us = [spzeros(ComplexF64,2^L,2^L) for i in 1:L]
-    basis = getBasis(L)
-    answers = deepcopy(basis)    
-    for i in 1:2^L
-        for k in 1:L
-            σx(k,basis[i],answers[k])
-
-            mats[k][:,i] .= answers[k]
-        end
-    end
-    for i in 1:L
-        us[i] = sparse(round.(exp(-im .* mats[i] .* (1-ε) * pi/2) , digits=15))
-    end
-    return us
-end
-
 @timeit to function autocorrelator(spins, basis, eps, Ureal2, N)
     initKet = getKet(spins)
     L = length(spins)
     negOneSpins = replace(spins, 0 => -1)
 
 
-    autoCor = zeros(N+1)
+    autoCor = zeros(L,N+1)
     moreSpins = zeros(L,N+1)
     currentKet = deepcopy(initKet)
     interKet = zeros(ComplexF64, 2^L)
     newKet = zeros(ComplexF64, 2^L)
 
-    autoCor[1] = 1.0
+    autoCor[:,1] .= 1.0
     moreSpins[:,1] = negOneSpins
      for i in 2:N+1
         for k in 1:L
@@ -309,19 +308,20 @@ end
         @timeit to "U2 mul" mul!(newKet,Ureal2,currentKet)
     
         getSpins!(newKet, basis, moreSpins, i)
-        autoCor[i] = moreSpins[Int(round(L/2)),i]*negOneSpins[Int(round(L/2))]
-
+        autoCor[:,i] = moreSpins[:,i] .* negOneSpins
 
         currentKet, newKet = newKet, currentKet
     end
+
     return autoCor, moreSpins
 end
 function gethsandjs(niters, L, J0, σj, σh)
     hs = zeros(niters, L)
     js = zeros(niters, Int(L*(L-1)/2))
+
     for i in eachindex(hs)
         if σh > 0.0
-            hs[i] = rand(Uniform(0.0, σh))
+            hs[i] = rand(Normal(0.0, σh))
         else
             hs[i] = 0.0
         end
@@ -329,22 +329,23 @@ function gethsandjs(niters, L, J0, σj, σh)
 
     for i in eachindex(js)
         if σj > 0.0
-            js[i] = rand(Uniform(J0-σj, J0+σj))
+            js[i] = rand(Normal(J0, σj))
         else
-            js[i] = 0.0
+            js[i] = J0
         end
     end
+
     return hs, js
 end
-@timeit to function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh, t)
+@timeit to function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh; t=0.0, BCs="open")
     L = length(spins)
     Hspace = spzeros(ComplexF64, 2^L, 2^L)
 
     hs, js = gethsandjs(niters, L, J0, σj, σh)
 
     
-    cors = zeros(nperiods+1, niters)
-    finalCors=zeros(nperiods+1)
+    cors = zeros(L, nperiods+1, niters)
+    finalCors=zeros(L, nperiods+1)
     allSpins = zeros(L, nperiods+1, niters)
     jIsingTensor = getIsingNNJtensor(L)
     #jTensor = getJtensor(L, 0.0, t)    # most of the time
@@ -360,13 +361,72 @@ end
     #u1s = betterU1(L, ε)
 
     for i in 1:niters
-        cors[:,i],allSpins[:,:, i]  = autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor), nperiods)
-        if i % 10 == 0
+        cors[:,:,i],allSpins[:,:, i]  = autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; BCs=BCs), nperiods)
+        if i % (niters/10) == 0
             println("Finished ",i,"th iteration")
         end
     end
-    finalCors = mean(cors, dims=2)
+
+    finalCors = mean(cors, dims=3)
     allSpins[:,:,1] = mean(allSpins,dims=3)
 
     return finalCors, allSpins[:,:,1]
+end
+@timeit to function avgLevelSpacings(niters, nperiods, spins, ε, J0, σj, σh; t=0.0, BCs="open")
+    L = length(spins)
+    Hspace = spzeros(ComplexF64, 2^L, 2^L)
+    Hspace2 = Hermitian(spzeros(ComplexF64, 2^L, 2^L))
+
+    hs, js = gethsandjs(niters, L, J0, σj, σh)
+    rats = zeros(niters)
+    jIsingTensor = getIsingNNJtensor(L)
+    #jTensor = getJtensor(L, 0.0, t)    # most of the time
+    #jArrays = convertToArrays(jTensor) # also most of the tim
+    hTensor = getHtensor(L)            # more of the time
+
+    basis = zeros(2^L, L)
+    for i in 1:2^L
+        basis[i,:] = Float64.(reverse(digits(i-1, base=2, pad=L)))
+    end
+    replace!(x->iszero(x) ? -1.0 : x, basis) #This basis is a matrix of the spins
+    
+    u1 = newU1(L, ε)
+    noconverge=0
+
+    for i in 1:niters
+        @timeit to "matmul" Hspace2 = Array(u1*IsingefficU2(Hspace,hs[i,:],js[i,:],jIsingTensor,hTensor, BCs=BCs))
+        @timeit to "eigs" vals = eigvals!(Hspace2)
+        #vals = Real.(diag(Array(efficientHam(Hspace,hs[i,:],js[i,:],jIsingTensor,hTensor; BCs=BCs))))
+        #println(vals)
+        rats[i] = levelspacing( mod.(Real.(round.(log.(vals) .* im,digits=8)), 2*pi) )
+        #rats[i] = levelspacing( vals )
+        if i % (niters/10) == 0
+            #println("Finished ",i,"th iteration")
+        end
+    end
+
+    return rats
+end
+
+function lsrplotter()
+    sigJRange = 10 .^ collect(range(-2,1;step=0.2))
+    n = length(sigJRange)
+    lsrs = zeros(2, n)
+
+    niter = 100
+    nperiods = 1000
+    ε = 0.1
+    i = 1
+
+    for l in 7:8
+        println("Starting L=",l)
+        for j in 1:n
+        J0 = sigJRange[j]
+        init = rand([0,1], l)
+        lsrs[i,j] = avgLevelSpacings(niter, nperiods, init, ε, J0, 0.2*J0, pi )
+        end
+        i += 1
+    end
+
+    return sigJRange, lsrs'
 end

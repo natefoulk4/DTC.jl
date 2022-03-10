@@ -58,6 +58,29 @@ function savedata(filename, output::Tuple)
     return nothing
 end
 
+function writeVector(filename, vector)
+    open(filename, "w") do f
+        write(f, Int64(length(vector)))
+        for i in eachindex(vector)
+            write(f, Float64(vector[i]))
+        end
+    end
+    return nothing
+end
+
+function readVector(filename)
+    open(filename, "r") do f
+
+        n = read(f, Int64)
+        vec = zeros(Float64, n)
+        for i in eachindex(vec)
+            vec[i] = read(f, Float64)
+        end
+    end
+    return vec
+end
+
+
 function readdata(filename)
     open(filename, "r") do f
         # do realres

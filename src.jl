@@ -318,6 +318,8 @@ end
 function gethsandjs(niters, L, J0, σj, σh)
     hs = zeros(niters, L)
     js = zeros(niters, Int(L*(L-1)/2))
+    M = 8
+    discrete_Jrange = J0 .+ (σj .* cos.(pi*collect(0:M-1)/(M-1)))
 
     for i in eachindex(hs)
         if σh > 0.0
@@ -329,7 +331,7 @@ function gethsandjs(niters, L, J0, σj, σh)
 
     for i in eachindex(js)
         if σj > 0.0
-            js[i] = rand(Normal(J0, σj))
+            js[i] = rand(discrete_Jrange)
         else
             js[i] = J0
         end
@@ -401,32 +403,49 @@ end
         rats[i] = levelspacing( mod.(Real.(round.(log.(vals) .* im,digits=8)), 2*pi) )
         #rats[i] = levelspacing( vals )
         if i % (niters/10) == 0
-            #println("Finished ",i,"th iteration")
+            #println("Finished $i th iteration out of $niters")
         end
     end
 
-    return rats
+    return mean(rats)
 end
 
-function lsrplotter()
-    sigJRange = 10 .^ collect(range(-2,1;step=0.2))
-    n = length(sigJRange)
-    lsrs = zeros(2, n)
+function lsrplotter(param, Lrange)
 
-    niter = 100
+    if param == "eps"
+        paramRange = range(0.0, 1.0, step=0.05)
+    elseif param == "j"
+        paramRange = 10 .^ collect(range(-2,1.5;step=0.2))
+    elseif param == "sigH"
+        paramRange = 10 .^ collect(range(-2,2;step=0.4))
+    end
+    n = length(paramRange)
+    lsrs = zeros(length(Lrange), n)
+
+    niter = 1000
     nperiods = 1000
+    J0 = pi/4
+    σJ = pi/2
+    σH  = pi/50
     ε = 0.1
     i = 1
 
-    for l in 7:8
+    for l in Lrange
         println("Starting L=",l)
-        for j in 1:n
-        J0 = sigJRange[j]
-        init = rand([0,1], l)
-        lsrs[i,j] = avgLevelSpacings(niter, nperiods, init, ε, J0, 0.2*J0, pi )
+        for (j,param) in enumerate(paramRange) 
+            if param == "eps"
+                ε = param
+            elseif param == "j"
+                J0 = param
+            elseif param == "sigH"
+                σH = param
+            end
+            init = rand([0,1], l)
+            lsrs[i,j] = avgLevelSpacings(niter, nperiods, init, ε, J0, σJ, σH ; BCs="open")
+            println("Finished $j th data point out of $n ($niter iterations each point)")
         end
         i += 1
     end
 
-    return sigJRange, lsrs'
+    return paramRange, lsrs'
 end

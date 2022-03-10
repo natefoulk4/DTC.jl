@@ -72,12 +72,12 @@ function readVector(filename)
     open(filename, "r") do f
 
         n = read(f, Int64)
-        vec = zeros(Float64, n)
-        for i in eachindex(vec)
-            vec[i] = read(f, Float64)
+        vector = zeros(Float64, n)
+        for i in eachindex(vector)
+            vector[i] = read(f, Float64)
         end
     end
-    return vec
+    return vector
 end
 
 

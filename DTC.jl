@@ -76,8 +76,8 @@ function readVector(filename)
         for i in eachindex(vector)
             vector[i] = read(f, Float64)
         end
+        return vector
     end
-    return vector
 end
 
 

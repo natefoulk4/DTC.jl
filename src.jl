@@ -410,7 +410,7 @@ end
     return mean(rats)
 end
 
-function lsrplotter(param, Lrange)
+function lsrplotter(param, Lrange; BCs)
 
     if param == "eps"
         paramRange = range(0.0, 1.0, step=0.05)
@@ -441,7 +441,7 @@ function lsrplotter(param, Lrange)
                 σH = param
             end
             init = rand([0,1], l)
-            lsrs[i,j] = avgLevelSpacings(niter, nperiods, init, ε, J0, σJ, σH ; BCs="open")
+            lsrs[i,j] = avgLevelSpacings(niter, nperiods, init, ε, J0, σJ, σH ; BCs=BCs)
             println("Finished $j th data point out of $n ($niter iterations each point)")
         end
         i += 1

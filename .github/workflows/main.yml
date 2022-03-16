@@ -34,4 +34,5 @@ jobs:
         run: julia -e 'using Pkg; Pkg.test("DTC", coverage=true)'
         
       - name: Submit coverage results to Codecov
-        run: julia -e 'using Pkg; cd(Pkg.dir("DTC")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+        run: julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
+

@@ -12,7 +12,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  build-and-test:
+  build:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -31,8 +31,9 @@ jobs:
         
         # Run tests
       - name: Run Julia package tests
-        run: julia -e 'using Pkg; Pkg.test("DTC", coverage=true)'
+        run: julia --project -e 'using Pkg; Pkg.test(coverage=true)'
         
       - name: Submit coverage results to Codecov
-        run: julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
+        run: julia --project -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+
 

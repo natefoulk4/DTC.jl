@@ -1,5 +1,5 @@
 
-using BenchmarkTools, Plots, FFTW
+using Plots, FFTW
 
 include("src.jl")
 

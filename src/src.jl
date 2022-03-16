@@ -1,8 +1,6 @@
 
 using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs
 
-const to = TimerOutput()
-
 function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF64, Int64})
     L = length(spins[1])
     zeroSpinor = ( [(reverse(digits(i, base=2, pad=L))) for i in 0:2^L-1], spzeros(ComplexF64, 2^L) )

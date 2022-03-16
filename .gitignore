@@ -8,4 +8,4 @@
 # Data and notebook files
 data*
 *ipynb*
-.*
+.DS*

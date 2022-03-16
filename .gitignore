@@ -1,5 +1,11 @@
-output
-test
+# Output/media files
+*output*  
+*test*
+*.png
+*.key
+*.out
+
+# Data and notebook files
 data*
 *ipynb*
 .*

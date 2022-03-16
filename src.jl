@@ -2,6 +2,7 @@
 using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs
 
 const to = TimerOutput()
+
 function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF64, Int64})
     L = length(spins[1])
     zeroSpinor = ( [(reverse(digits(i, base=2, pad=L))) for i in 0:2^L-1], spzeros(ComplexF64, 2^L) )
@@ -52,6 +53,10 @@ end
         stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n = 2, 8 if n=1
         halfstride = Int(round(stride/2))
         stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+        # L = 2
+        # dd du ud uu
+        # 1 -1 -1 1    N = 1
+        # 1 -1 -1 1    N = 2
         # L = 3 
         # ddd ddu dud duu udd udu uud uuu
         # 1  1 -1 -1 -1 -1  1  1   4,2,1   N=1 [5-12]

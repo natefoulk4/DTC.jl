@@ -1,5 +1,10 @@
 module DTC
 
-greet() = print("Hello World!")
+using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs, Plots, FFTW
+
+const to = TimerOutput()
+
+include("IO.jl")
+include("src.jl")
 
 end # module

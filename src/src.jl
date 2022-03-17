@@ -25,7 +25,7 @@ Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n (on the 
 end
 "
     getIsingNNJtensor(L)
-Return ``2^L x L`` matrix, where the ``n``th column corresponds to the diagonal of the J\_n matrix. _Ising model only._"
+Return ``2^L x L`` matrix, where the ``n``th column corresponds to the diagonal of the J\\_n matrix. _Ising model only._"
 @timeit to function getIsingNNJtensor(L)
     diagonals = fill(1.0 + 0.0im, (2^L,L))
     for n in 1:L # n is the nth exchange coupling (J_{n, n+1})

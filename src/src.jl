@@ -13,6 +13,7 @@ function initialize(spins::Vector{Vector{Int64}}, coeffs::SparseVector{ComplexF6
     end
     return zeroSpinor[2]
 end
+"test documentation"
 function σx(n::Int, spinArray::SparseVector{ComplexF64, Int64}, newArray::SparseVector{ComplexF64, Int64})
     L = Int(log2(length(spinArray)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1

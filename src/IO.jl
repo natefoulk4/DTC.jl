@@ -3,7 +3,9 @@ using Plots, FFTW
 
 include("src.jl")
 
-plotly()
+"
+    plotter(effAvgResult; which={'worst', 'average', 'all'} )
+Plot the autocorrelator of the DTC for the ``which`` qubit. ``'all'`` is not yet supported."
 function plotter(effAvgResult; which="worst")
     allres, spinmap = effAvgResult
     worst_qubit = findmin(mean(allres[:,1:2:end,:], dims=(2,3))[:])[2]
@@ -24,6 +26,7 @@ function plotter(effAvgResult; which="worst")
         println("FIXME. Plot all qubits")
         return nothing
     else
+        plotly()
         l = @layout [a b ; c{0.2h}; d{0.2h}] 
         plot(realres, opacity=0.5, xscale=:log10, legend=false)
         plot!(collect(1:2:nperiods),realres[1:2:nperiods])
@@ -38,7 +41,10 @@ end
 
 plotter(effAvgResult1, effAvgResult2) = plotter((effAvgResult1, effAvgResult2))
 
-function savedata(filename, output::Tuple)
+"
+    writeAutoCor(filename, output) 
+writes the output of effAvgAutoCor (a 2-tuple) in binary"
+function writeAutoCor(filename, output::Tuple)
     realres, spinmap = output
     open(filename, "w") do f
         # do realres
@@ -58,30 +64,10 @@ function savedata(filename, output::Tuple)
     return nothing
 end
 
-function writeVector(filename, vector)
-    open(filename, "w") do f
-        write(f, Int64(length(vector)))
-        for i in eachindex(vector)
-            write(f, Float64(vector[i]))
-        end
-    end
-    return nothing
-end
-
-function readVector(filename)
-    open(filename, "r") do f
-
-        n = read(f, Int64)
-        vector = zeros(Float64, n)
-        for i in eachindex(vector)
-            vector[i] = read(f, Float64)
-        end
-        return vector
-    end
-end
-
-
-function readdata(filename)
+"
+    readAutoCor(filename) 
+read the output of effAvgAutoCor (a 2-tuple) in binary"
+function readAutoCor(filename)
     open(filename, "r") do f
         # do realres
         n = read(f, Int64)
@@ -102,6 +88,38 @@ function readdata(filename)
     end
 end
 
+"
+    writeVector(filename, vector) 
+Write a vector of floats in binary"
+function writeVector(filename, vector)
+    open(filename, "w") do f
+        write(f, Int64(length(vector)))
+        for i in eachindex(vector)
+            write(f, Float64(vector[i]))
+        end
+    end
+    return nothing
+end
+
+"
+    readVector(filename) 
+Read a vector of floats in binary"
+function readVector(filename)
+    open(filename, "r") do f
+
+        n = read(f, Int64)
+        vector = zeros(Float64, n)
+        for i in eachindex(vector)
+            vector[i] = read(f, Float64)
+        end
+        return vector
+    end
+end
+
+
+"
+    binToBase10(x::Vector{Int})
+Convert a binary string into a base-10 number."
 function binToBase10(x::Vector{Int64})
     L = length(x)
     basis = [2^(L-i) for i in 1:L]

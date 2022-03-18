@@ -2,7 +2,7 @@ module DTC
 
 using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs, Plots, FFTW
 
-export getIsingNNJtensor, autocorrelator, effAvgAutoCor, plotter, LsrsOverParamRange
+export getIsingNNJtensor, autocorrelator, effAvgAutoCor, plotter, LsrsOverParamRange, readVector, writeVector, readAutoCor, writeAutoCor, binToBase10
 
 const to = TimerOutput()
 

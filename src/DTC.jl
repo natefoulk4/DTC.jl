@@ -2,7 +2,7 @@ module DTC
 
 using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs, Plots, FFTW
 
-export getIsingNNJtensor, σx
+export getIsingNNJtensor
 
 const to = TimerOutput()
 

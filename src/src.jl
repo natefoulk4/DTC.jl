@@ -1,10 +1,9 @@
 
 using LinearAlgebra, Statistics, Distributions, TimerOutputs
 
-
 "
     Rx(n, φ, spinKet, newKet)
-Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n (on the ``n``th qubit). Return ``newKet``"
+Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n(φ) (on the ``n``th qubit). Return ``newKet``"
 @timeit to function Rx(n::Int, φ::Real, spinKet::Vector{ComplexF64}, newKet::Vector{ComplexF64})
     L = Int(log2(length(spinKet)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
@@ -23,9 +22,10 @@ Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n (on the 
 
     return newKet
 end
+
 "
     getIsingNNJtensor(L)
-Return ``2^L x L`` matrix, where the ``n``th column corresponds to the diagonal of the J\\_n matrix. _Ising model only._"
+Return ``2^L x L`` matrix, where the ``n``th column contains the approriate signs for the diagonal of the J\\_n matrix. _Ising model only._"
 @timeit to function getIsingNNJtensor(L)
     diagonals = fill(1.0 + 0.0im, (2^L,L))
     for n in 1:L # n is the nth exchange coupling (J_{n, n+1})
@@ -61,6 +61,9 @@ Return ``2^L x L`` matrix, where the ``n``th column corresponds to the diagonal 
     return diagonals
 end
 
+"
+    getHtensor(L)
+Return a ``2^L x L`` matrix where the ``n``th column contains the appropriate signs depending on whether that ``n``th spin is up or down for that base ket."
 function getHtensor(L)
     hTensor = fill(1.0+0.0im, (2^L, L))
     for n in 1:L    
@@ -76,6 +79,9 @@ function getHtensor(L)
     return hTensor
 end
 
+"
+    levelspacing(vals)
+Calculate level spacing ratios (LSRs) of a list of eigenvalues (not necessarily sorted). Return mean of the LSRs."
 @timeit to function levelspacing(vals)
     sort!(vals)
     for i in 1:length(vals)-1
@@ -87,6 +93,9 @@ end
     return mean(vals[1:end-2])
 end
 
+"
+    efficientHam(Hspace, hs, js, jMat, hTensor; BCs)
+Multiply each J and H columns of ``jMat`` and ``hTensor`` by the appropriate prefactors contained in ``js`` and ``hs``. Add them together and assign them to the diagonal of ``Hspace``, overwriting ``Hspace`` completely. Return ``Hspace``. keyword: ``BCs={'open', 'periodic'}``"
 @timeit to function efficientHam(Hspace, hs, js, jMat, hTensor; BCs)
     L = Int(log2(size(Hspace)[1]))
     for i in 1:2^L
@@ -107,6 +116,9 @@ end
     return Hspace
 end
 
+"
+    getKet(spinArray)
+Given a (length ``L``) array of spins (must be a pure state), find the appropriate base ket (length ``2^L``) of Hilbert space."
 function getKet(spinArray)
     L = length(spinArray)
     spinBasis=[reverse(digits(i, base=2, pad=length(spinArray))) for i in 0:2^length(spinArray)-1]
@@ -119,6 +131,9 @@ function getKet(spinArray)
     return coeffs
 end
 
+"
+    getSpins!(ket, spinBasis, spinMatrix, ind)
+Convert the base ``ket``` (length ``2^L``) to an array of spins (projected to z-axis). Write these spins in the ``ind``th column of ``spinMatrix``."
 @timeit to function getSpins!(ket, spinBasis, spinMatrix, ind)
    for i in 1:size(spinBasis)[1] #2^L
         for j in 1:size(spinBasis)[2] #L
@@ -128,9 +143,11 @@ end
     return nothing
 end
 
-
-@timeit to function IsingefficU2(Hspace, hs, js, jArrays, hTensor; BCs="open") 
-    efficientHam(Hspace, hs, js, jArrays, hTensor; BCs=BCs)
+"
+    IsingefficU2(Hspace, hs, jz, jArrays, hTensor; BCs='open')
+Given memory ``Hspace``, call ``efficientHam`` and then exponentiate the diagonal elements in-place. Return Hspace as U2, the MBL unitary."
+@timeit to function IsingefficU2(Hspace, hs, js, jMat, hTensor; BCs="open") 
+    efficientHam(Hspace, hs, js, jMat, hTensor; BCs=BCs)
     for i in 1:size(Hspace)[1]
         Hspace[i,i] = exp(-im*Hspace[i,i])
     end
@@ -138,11 +155,15 @@ end
     #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 end
 
-matrix_density(mat::SparseMatrixCSC) = nnz(mat)/length(mat)
+"
+    matrix_density(mat)
+Given a matrix ``mat``, return the density of the matrix, which is the ratio of nonzero entries to the total number of matrix entries."
 matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 
-
-@timeit to function autocorrelator(spins, basis, eps, Ureal2, N)
+"
+    autocorrelator(spins, basis, eps, U2, N)
+Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return"
+@timeit to function autocorrelator(spins, basis, eps, U2, N)
     initKet = getKet(spins)
     L = length(spins)
     negOneSpins = replace(spins, 0 => -1)
@@ -163,7 +184,7 @@ matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
             interKet, currentKet = currentKet, interKet
         end
 
-        @timeit to "U2 mul" mul!(newKet,Ureal2,currentKet)
+        @timeit to "U2 mul" mul!(newKet,U2,currentKet)
     
         getSpins!(newKet, basis, moreSpins, i)
         autoCor[:,i] = moreSpins[:,i] .* negOneSpins

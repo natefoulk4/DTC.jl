@@ -162,7 +162,7 @@ matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 
 "
     autocorrelator(spins, basis, eps, U2, N)
-Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return"
+Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return two matrices both size ``L x N+1``. 1st return (autoCor) is the correlation relative to the initial state. The second (moreSpins) is the _absolute_ spin of each qubit"
 @timeit to function autocorrelator(spins, basis, eps, U2, N)
     initKet = getKet(spins)
     L = length(spins)
@@ -187,17 +187,21 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
         @timeit to "U2 mul" mul!(newKet,U2,currentKet)
     
         getSpins!(newKet, basis, moreSpins, i)
-        autoCor[:,i] = moreSpins[:,i] .* negOneSpins
 
         currentKet, newKet = newKet, currentKet
     end
 
+    autoCor = moreSpins .* negOneSpins
+
     return autoCor, moreSpins
 end
 
-function gethsandjs(niters, L, J0, σj, σh)
+"
+    getHsAndJs(niters, L, J0, σJ, σH)
+Sample distribution ``niter*L`` times. Return Hmatrix (``niters x L``) and J matrix (``niters x L``)"
+function getHsAndJs(niters, L, J0, σj, σh)
     hs = zeros(niters, L)
-    js = zeros(niters, Int(L*(L-1)/2))
+    js = zeros(niters, L)
     M = 8
     discrete_Jrange = J0 .+ (σj .* cos.(pi*collect(0:M-1)/(M-1)))
 
@@ -220,11 +224,14 @@ function gethsandjs(niters, L, J0, σj, σh)
     return hs, js
 end
 
+"
+    effAvgAutoCor(niters, nperiods, spins, ε, J0, σJ, σH; t, BCs)
+Exact same as autocorrelator, except average over ``niters`` simulations. Return ``finalCors`` and ``allSpins``, which are both ``2^L x L`` matrices "
 @timeit to function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh; t=0.0, BCs="open")
     L = length(spins)
     Hspace = spzeros(ComplexF64, 2^L, 2^L)
 
-    hs, js = gethsandjs(niters, L, J0, σj, σh)
+    hs, js = getHsAndJs(niters, L, J0, σj, σh)
 
     
     cors = zeros(L, nperiods+1, niters)
@@ -251,15 +258,18 @@ end
     finalCors = mean(cors, dims=3)
     allSpins[:,:,1] = mean(allSpins,dims=3)
 
-    return finalCors, allSpins[:,:,1]
+    return (finalCors, allSpins[:,:,1])
 end
 
+"
+    avgLevelSpacings(niters, nperiods, spins, ε, J0, σJ, σH; t=0.0, BCs='open')
+Calculate ``niters`` of the level spacing ratios. Return the average LSR overall."
 @timeit to function avgLevelSpacings(niters, nperiods, spins, ε, J0, σj, σh; t=0.0, BCs="open")
     L = length(spins)
     Hspace = zeros(ComplexF64, 2^L, 2^L)
     Hspace2 = Hermitian(zeros(ComplexF64, 2^L, 2^L))
 
-    hs, js = gethsandjs(niters, L, J0, σj, σh)
+    hs, js = getHsAndJs(niters, L, J0, σj, σh)
     rats = zeros(niters)
     jIsingTensor = getIsingNNJtensor(L)
     hTensor = getHtensor(L)            # more of the time
@@ -270,7 +280,7 @@ end
     end
     replace!(x->iszero(x) ? -1.0 : x, basis) #This basis is a matrix of the spins
     
-    u1 = newU1(L, ε)
+    u1 = newU1(L, ε) #FIXME
     noconverge=0
 
     for i in 1:niters
@@ -288,7 +298,10 @@ end
     return mean(rats)
 end
 
-function lsrplotter(param, Lrange; BCs)
+"
+    LsrsOverParamRange(param, Lrange; BCs)
+Calculate LSRs over a parameter range (``param={'eps','j','sigH'}``). Done for several values of L (``Lrange``). Boundary conditions (``BCs={'open','periodic'}``) optional."
+function LsrsOverParamRange(param, Lrange; BCs)
 
     if param == "eps"
         paramRange = range(0.0, 1.0, step=0.05)
@@ -296,6 +309,8 @@ function lsrplotter(param, Lrange; BCs)
         paramRange = 10 .^ collect(range(-2,1.5;step=0.2))
     elseif param == "sigH"
         paramRange = 10 .^ collect(range(-2,2;step=0.4))
+    else
+        error("Parameter not correctly specificied!")
     end
     n = length(paramRange)
     lsrs = zeros(length(Lrange), n)

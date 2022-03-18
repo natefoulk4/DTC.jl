@@ -36,7 +36,7 @@ function plotter(effAvgResult; which="worst")
     end
 end
 
-plotter(x::Tuple) = plotter(x[1], x[2])
+plotter(effAvgResult1, effAvgResult2) = plotter((effAvgResult1, effAvgResult2))
 
 function savedata(filename, output::Tuple)
     realres, spinmap = output

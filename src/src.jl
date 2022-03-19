@@ -1,6 +1,24 @@
 
 using LinearAlgebra, Statistics, Distributions, TimerOutputs
 
+
+"
+binToBase10(x::Vector{Int})
+Convert a binary vector into a base-10 number."
+function binToBase10(x)
+    replace!(y->isequal(-1.0, y) ? 0.0 : y, x)
+    L = length(x)
+    basis = [2^(L-i) for i in 1:L]
+    return (basis⋅x)
+end
+
+"
+base10ToBin(x)
+Convert a a base-10 number into a binary vector of length L"
+function base10ToBin(x, L)
+    return replace!(x->iszero(x) ? -1.0 : x, complex.(reverse(digits(x-1, base=2, pad=L))))
+end
+
 "
     Rx(n, φ, spinKet, newKet)
 Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n(φ) (on the ``n``th qubit). Return ``newKet``"
@@ -82,7 +100,7 @@ end
 "
     levelspacing(vals)
 Calculate level spacing ratios (LSRs) of a list of eigenvalues (not necessarily sorted). Return mean of the LSRs."
-@timeit to function levelspacing(vals)
+@timeit to function levelspacing(vals::Vector{Real})
     sort!(vals)
     for i in 1:length(vals)-1
         vals[i] = vals[i+1] - vals[i]
@@ -119,7 +137,7 @@ end
 "
     getKet(spinArray)
 Given a (length ``L``) array of spins (must be a pure state), find the appropriate base ket (length ``2^L``) of Hilbert space."
-function getKet(spinArray)
+function getKet(spinArray::Vector{Int})
     L = length(spinArray)
     spinBasis=[reverse(digits(i, base=2, pad=length(spinArray))) for i in 0:2^length(spinArray)-1]
     coeffs = zeros(ComplexF64,2^L)
@@ -261,6 +279,17 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     return (finalCors, allSpins[:,:,1])
 end
 
+"   
+    getBasis(L)
+Return a ``2^L x L`` matrix where the ``i``th row corresponds to the ``i``th spin ket (+1 and -1)."
+function getBasis(L)
+    basis = zeros(2^L, L)
+    for i in 1:2^L
+        basis[i,:] = base10ToBin(i, L)
+    end
+    return basis
+end
+
 "
     avgLevelSpacings(niters, nperiods, spins, ε, J0, σJ, σH; t=0.0, BCs='open')
 Calculate ``niters`` of the level spacing ratios. Return the average LSR overall."
@@ -274,12 +303,6 @@ Calculate ``niters`` of the level spacing ratios. Return the average LSR overall
     jIsingTensor = getIsingNNJtensor(L)
     hTensor = getHtensor(L)            # more of the time
 
-    basis = zeros(2^L, L)
-    for i in 1:2^L
-        basis[i,:] = Float64.(reverse(digits(i-1, base=2, pad=L)))
-    end
-    replace!(x->iszero(x) ? -1.0 : x, basis) #This basis is a matrix of the spins
-    
     u1 = newU1(L, ε) #FIXME
     noconverge=0
 

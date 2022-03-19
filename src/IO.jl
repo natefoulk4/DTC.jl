@@ -1,7 +1,6 @@
 
 using Plots, FFTW
 
-include("src.jl")
 
 "
     plotter(effAvgResult; which={'worst', 'average', 'all'} )
@@ -114,14 +113,4 @@ function readVector(filename)
         end
         return vector
     end
-end
-
-
-"
-    binToBase10(x::Vector{Int})
-Convert a binary string into a base-10 number."
-function binToBase10(x::Vector{Int64})
-    L = length(x)
-    basis = [2^(L-i) for i in 1:L]
-    return(basis⋅x)
 end

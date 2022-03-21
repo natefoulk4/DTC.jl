@@ -1,8 +1,8 @@
-using DTC, Test
+using DTC, Test, LinearAlgebra, Statistics
 
 @testset "src.jl tests" begin
     @testset "getIsingNNJtensor" begin
-        @test getIsingNNJtensor(2) == [  1.0+0.0im  1.0+0.0im;
+        @test DTC.getIsingNNJtensor(2) == [  1.0+0.0im  1.0+0.0im;
                                         -1.0+0.0im -1.0+0.0im;
                                         -1.0+0.0im -1.0+0.0im;
                                         1.0+0.0im  1.0+0.0im  ]
@@ -45,6 +45,25 @@ using DTC, Test
     @testset "base10 to binary" begin
         @test base10ToBin(8,3) == [1,1,1]
         @test base10ToBin(1,4) == [-1,-1,-1,-1]
+    end
+    @testset "efficientHam" begin
+        @test DTC.efficientHam(zeros(ComplexF64, (4,4)), [-1.0, 1.0], [3.0], [1.0 -1.0 -1.0 1.0]', [-1.0 -1.0 1.0 1.0; -1.0 1.0 -1.0 1.0]'; BCs="open") == convert.(ComplexF64, [3.0 0.0 0.0 0.0; 0.0 -1.0 0.0 0.0; 0.0 0.0 -5.0 0.0; 0.0 0.0 0.0 3.0])
+    end
+    @testset "getSpins!" begin
+        spins = [0.0; 0.0]
+        DTC.getSpins!([0.0, 1.0, 0.0, 0.0], DTC.getBasis(2), spins, 1)
+        @test spins[:,1] == [-1.0, 1.0]
+        spins = [0.0; 0.0; 0.0]
+        DTC.getSpins!(normalize([0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0]), DTC.getBasis(3), spins, 1)
+        @test spins[:,1] ≈ [1.0, 0.0, 1.0]
+    end
+    @testset "autocorrelator" begin
+        @test minimum(autocorrelator([1,0,1,0],DTC.getBasis(4),0.0, DTC.IsingefficU2(zeros(ComplexF64, (16,16)), [0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0], DTC.getIsingNNJtensor(4), DTC.getHtensor(4)), 100)[1][1,:][1:2:end]) ≈ 1.0
+        @test minimum(autocorrelator([1,0,0,1],DTC.getBasis(4),0.0, DTC.IsingefficU2(zeros(ComplexF64, (16,16)), [-1.0, 1.0, 1.0, -1.0], [1.0, 1.0, 1.0, 1.0], DTC.getIsingNNJtensor(4), DTC.getHtensor(4)), 100)[1][1,:][1:2:end]) ≈ 1.0
+        @test autocorrelator([1,0,1,0,0,0,0],DTC.getBasis(7), 0.1, DTC.IsingefficU2(zeros(ComplexF64, (2^7,2^7)), [-0.3, 0.4, -0.5, 0.6, -0.7, 0.8, -0.9], [1.1, 1.05, -1.02, 1.01, -0.95, -0.9, -0.98], DTC.getIsingNNJtensor(7), DTC.getHtensor(7)), 100)[1][1,:][end] ≈ 0.9586187956175708
+    end
+    @testset "effAvgAutoCor" begin
+        isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0], 0.10, 1.0, 0.10, 2.0)[1][:,end]),   0.8177; atol=0.02)
     end
 end
 

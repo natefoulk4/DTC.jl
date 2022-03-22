@@ -23,6 +23,8 @@ using DTC, Test, LinearAlgebra, Statistics
         @test levelspacing([2.0, 4.0, 3.0, 1.0]) == levelspacing([1.0, 2.0, 3.0, 4.0])
         @test levelspacing([2.0, 4.0, 3.0, 1.0]) == 1.0
         @test levelspacing([1.0, 3.0, 4.0, 5.0]) == 0.75
+        rng = rand(Float64,4)
+        @test levelspacing(rng) ≈ levelspacing(rng .+ 0.5)
         @test_throws MethodError levelspacing([1.0 3.0 4.0 5.0])
         @test_throws MethodError levelspacing([1.0+0.0im, 2.0+0.0im, 3.0+0.0im, 4.0+0.0im])
     end
@@ -63,7 +65,7 @@ using DTC, Test, LinearAlgebra, Statistics
         @test autocorrelator([1,0,1,0,0,0,0],DTC.getBasis(7), 0.1, DTC.IsingefficU2(zeros(ComplexF64, (2^7,2^7)), [-0.3, 0.4, -0.5, 0.6, -0.7, 0.8, -0.9], [1.1, 1.05, -1.02, 1.01, -0.95, -0.9, -0.98], DTC.getIsingNNJtensor(7), DTC.getHtensor(7)), 100)[1][1,:][end] ≈ 0.9586187956175708
     end
     @testset "effAvgAutoCor" begin
-        isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0], 0.10, 1.0, 0.10, 2.0)[1][:,end]),   0.8177; atol=0.02)
+        @test isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0], 0.10, 1.0, 0.10, 2.0)[1][:,end]),   0.8177; atol=0.02)
     end
     @testset "U1" begin
         @test U1(2,0.0) == complex.([0.0 0.0 0.0 -1.0; 

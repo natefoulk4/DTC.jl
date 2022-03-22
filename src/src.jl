@@ -101,14 +101,14 @@ end
     levelspacing(vals)
 Calculate level spacing ratios (LSRs) of a list of eigenvalues (not necessarily sorted). Return mean of the LSRs."
 @timeit to function levelspacing(vals::Vector{<:Real})
-    sort!(vals)
-    for i in 1:length(vals)-1
-        vals[i] = vals[i+1] - vals[i]
+    sortedvals = sort(vals)
+    for i in 1:length(sortedvals)-1
+        sortedvals[i] = sortedvals[i+1] - sortedvals[i]
     end
-    for i in 1:length(vals)-2
-        vals[i] = min(vals[i],vals[i+1])/max(vals[i],vals[i+1])
+    for i in 1:length(sortedvals)-2
+        sortedvals[i] = min(sortedvals[i],sortedvals[i+1])/max(sortedvals[i],sortedvals[i+1])
     end
-    return mean(vals[1:end-2])
+    return mean(sortedvals[1:end-2])
 end
 
 "

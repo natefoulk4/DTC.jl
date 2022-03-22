@@ -65,6 +65,16 @@ using DTC, Test, LinearAlgebra, Statistics
     @testset "effAvgAutoCor" begin
         isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0], 0.10, 1.0, 0.10, 2.0)[1][:,end]),   0.8177; atol=0.02)
     end
+    @testset "U1" begin
+        @test U1(2,0.0) == complex.([0.0 0.0 0.0 -1.0; 
+                              0.0 0.0 -1.0 0.0;
+                              0.0 -1.0 0.0 0.0;
+                              -1.0 0.0 0.0 0.0])
+        @test matrix_density(U1(3, 0.0)) == 0.125
+        @test matrix_density(U1(3, 0.05)) == 1.0
+        @test matrix_density(U1(4, 0.0)) == 0.0625
+        @test matrix_density(U1(4, 0.05)) == 1.0
+    end
 end
 
 @testset "IO.jl tests" begin

@@ -242,6 +242,23 @@ function getHsAndJs(niters, L, J0, σj, σh)
     return hs, js
 end
 
+@timeit to function U1(L, ε)
+    mat1 = zeros(ComplexF64, (2^L, 2^L))
+    mat2 = UniformScaling(1)
+    ket1 = zeros(ComplexF64, 2^L)
+    ket2 = zeros(ComplexF64, 2^L)
+    for n in 1:L
+        for i in 1:2^L
+            ket1 .= 0.0+0.0im
+            ket1[i] = 1.0+0.0im
+            Rx(n, (1-ε)*pi/2, ket1, ket2)
+            mat1[:,i] = ket2
+        end
+        mat2 = mat1 * mat2 
+    end
+    return round.(mat2, digits=15)
+end
+
 "
     effAvgAutoCor(niters, nperiods, spins, ε, J0, σJ, σH; t, BCs)
 Exact same as autocorrelator, except average over ``niters`` simulations. Return ``finalCors`` and ``allSpins``, which are both ``2^L x L`` matrices "
@@ -303,7 +320,7 @@ Calculate ``niters`` of the level spacing ratios. Return the average LSR overall
     jIsingTensor = getIsingNNJtensor(L)
     hTensor = getHtensor(L)            # more of the time
 
-    u1 = newU1(L, ε) #FIXME
+    u1 = U1(L, ε)
     noconverge=0
 
     for i in 1:niters

@@ -263,6 +263,7 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     if BCs != "open" && BCs != "periodic"
         error("Boundary conditions must be 'open' or 'periodic' !")
     end
+    #nothing
     L = length(spins)
     Hspace = spzeros(ComplexF64, 2^L, 2^L)
     negOneSpins = replace(spins, 0 => -1)

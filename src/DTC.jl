@@ -2,7 +2,7 @@ module DTC
 
 using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs, Plots, FFTW
 
-export autocorrelator, effAvgAutoCor, plotter, LsrsOverParamRange, readVector, writeVector, readAutoCor, writeAutoCor, binToBase10, base10ToBin, levelspacing, avgLevelSpacings, U1, matrix_density
+export autocorrelator, effAvgAutoCor, plotter, LsrsOverParamRange, readVector, writeVector, readAutoCor, writeAutoCor, binToBase10, base10ToBin, levelspacing, avgLevelSpacings, U1, matrix_density, to
 
 const to = TimerOutput()
 

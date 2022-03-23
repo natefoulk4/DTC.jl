@@ -60,9 +60,15 @@ using DTC, Test, LinearAlgebra, Statistics
         @test spins[:,1] ≈ [1.0, 0.0, 1.0]
     end
     @testset "autocorrelator" begin
-        @test minimum(autocorrelator([1,0,1,0],DTC.getBasis(4),0.0, DTC.IsingefficU2(zeros(ComplexF64, (16,16)), [0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0], DTC.getIsingNNJtensor(4), DTC.getHtensor(4)), 100)[1][1,:][1:2:end]) ≈ 1.0
-        @test minimum(autocorrelator([1,0,0,1],DTC.getBasis(4),0.0, DTC.IsingefficU2(zeros(ComplexF64, (16,16)), [-1.0, 1.0, 1.0, -1.0], [1.0, 1.0, 1.0, 1.0], DTC.getIsingNNJtensor(4), DTC.getHtensor(4)), 100)[1][1,:][1:2:end]) ≈ 1.0
-        @test autocorrelator([1,0,1,0,0,0,0],DTC.getBasis(7), 0.1, DTC.IsingefficU2(zeros(ComplexF64, (2^7,2^7)), [-0.3, 0.4, -0.5, 0.6, -0.7, 0.8, -0.9], [1.1, 1.05, -1.02, 1.01, -0.95, -0.9, -0.98], DTC.getIsingNNJtensor(7), DTC.getHtensor(7)), 100)[1][1,:][end] ≈ 0.9586187956175708
+        @test autocorrelator([1,0,1,0],DTC.getBasis(4),0.0, DTC.IsingefficU2(zeros(ComplexF64, (16,16)), [0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0], DTC.getIsingNNJtensor(4), DTC.getHtensor(4)), 100)[:,end] ≈ DTC.getKet([1,0,1,0])
+        @test autocorrelator([1,0,1,0],DTC.getBasis(4),0.0, DTC.IsingefficU2(zeros(ComplexF64, (16,16)), [0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0], DTC.getIsingNNJtensor(4), DTC.getHtensor(4)), 100)[:,end-1] ≈ DTC.getKet([0,1,0,1])
+
+        @test autocorrelator([1,0,0,1],DTC.getBasis(4),0.0, DTC.IsingefficU2(zeros(ComplexF64, (16,16)), [-1.0, 1.0, 1.0, -1.0], [1.0, 1.0, 1.0, 1.0], DTC.getIsingNNJtensor(4), DTC.getHtensor(4)), 100)[:,end] ≈ DTC.getKet([1,0,0,1])
+
+        finalKet = autocorrelator([1,0,1,0,0,0,0],DTC.getBasis(7), 0.1, DTC.IsingefficU2(zeros(ComplexF64, (2^7,2^7)), [-0.3, 0.4, -0.5, 0.6, -0.7, 0.8, -0.9], [1.1, 1.05, -1.02, 1.01, -0.95, -0.9, -0.98], DTC.getIsingNNJtensor(7), DTC.getHtensor(7)), 100)[:,end] 
+        spins = zeros(7,1)
+        DTC.getSpins!(finalKet, DTC.getBasis(7), spins, 1)
+        spins[1] ≈ 0.9586187956175708
     end
     @testset "effAvgAutoCor" begin
         @test isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0], 0.10, 1.0, 0.10, 2.0)[1][:,end]),   0.8177; atol=0.02)

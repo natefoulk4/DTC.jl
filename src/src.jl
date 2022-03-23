@@ -180,21 +180,19 @@ matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 
 "
     autocorrelator(spins, basis, eps, U2, N)
-Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return two matrices both size ``L x N+1``. 1st return (autoCor) is the correlation relative to the initial state. The second (moreSpins) is the _absolute_ spin of each qubit"
+Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return a matrix of all the kets (``2^L`` x ``N+1``)."
 @timeit to function autocorrelator(spins, basis, eps, U2, N)
     initKet = getKet(spins)
     L = length(spins)
-    negOneSpins = replace(spins, 0 => -1)
 
+    @timeit to "initializing kets" begin
+        allKets = zeros(ComplexF64, 2^L, N+1)
+        currentKet = deepcopy(initKet)
+        interKet = zeros(ComplexF64, 2^L)
+        newKet = zeros(ComplexF64, 2^L)
+    end
 
-    autoCor = zeros(L,N+1)
-    moreSpins = zeros(L,N+1)
-    currentKet = deepcopy(initKet)
-    interKet = zeros(ComplexF64, 2^L)
-    newKet = zeros(ComplexF64, 2^L)
-
-    autoCor[:,1] .= 1.0
-    moreSpins[:,1] = negOneSpins
+    allKets[:,1] = currentKet
      for i in 2:N+1
         for k in 1:L
             #mul!(interKet, U1s[k], currentKet)
@@ -204,14 +202,13 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
 
         @timeit to "U2 mul" mul!(newKet,U2,currentKet)
     
-        getSpins!(newKet, basis, moreSpins, i)
-
+        allKets[:,i] = newKet
         currentKet, newKet = newKet, currentKet
     end
 
-    autoCor = moreSpins .* negOneSpins
+    allKets = abs2.(allKets)
 
-    return autoCor, moreSpins
+    return allKets
 end
 
 "
@@ -261,39 +258,38 @@ end
 
 "
     effAvgAutoCor(niters, nperiods, spins, ε, J0, σJ, σH; t, BCs)
-Exact same as autocorrelator, except average over ``niters`` simulations. Return ``finalCors`` and ``allSpins``, which are both ``2^L x L`` matrices "
+Exact same as autocorrelator, except average over ``niters`` simulations. Return ``cors`` and ``allSpins``, which are both ``2^L x L`` matrices "
 @timeit to function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh; t=0.0, BCs="open")
+    if BCs != "open" && BCs != "periodic"
+        error("Boundary conditions must be 'open' or 'periodic' !")
+    end
     L = length(spins)
     Hspace = spzeros(ComplexF64, 2^L, 2^L)
+    negOneSpins = replace(spins, 0 => -1)
 
     hs, js = getHsAndJs(niters, L, J0, σj, σh)
 
     
-    cors = zeros(L, nperiods+1, niters)
-    finalCors=zeros(L, nperiods+1)
-    allSpins = zeros(L, nperiods+1, niters)
+    cors = zeros(L, nperiods+1)
+    allSpins = zeros(L, nperiods+1)
+    @timeit to "initializing allKets" allKets = zeros(2^L, nperiods+1)
     jIsingTensor = getIsingNNJtensor(L)
     hTensor = getHtensor(L)            # more of the time
 
-    basis = zeros(2^L, L)
-    for i in 1:2^L
-        basis[i,:] = Float64.(reverse(digits(i-1, base=2, pad=L)))
-    end
-    replace!(x->iszero(x) ? -1.0 : x, basis) #This basis is a matrix of the spins
-    
-    #u1s = betterU1(L, ε)
+    basis = getBasis(L)
 
     for i in 1:niters
-        cors[:,:,i],allSpins[:,:, i]  = autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; BCs=BCs), nperiods)
+        allKets += autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; BCs=BCs), nperiods)
         if i % (niters/10) == 0
             println("Finished ",i,"th iteration")
         end
     end
 
-    finalCors = mean(cors, dims=3)
-    allSpins[:,:,1] = mean(allSpins,dims=3)
+    @timeit to "averaging over iters" allKets = allKets ./ niters
+    @timeit to "getting spins" allSpins = basis' * allKets[:,:,1]
+    @timeit to "getting cors" cors = allSpins .* negOneSpins
 
-    return (finalCors, allSpins[:,:,1])
+    return cors, allSpins
 end
 
 "   

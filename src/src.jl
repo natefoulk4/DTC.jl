@@ -33,8 +33,10 @@ Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n(φ) (on 
     for i in 1:stride2
         for j in 1:stride
             #println(2*(i-1)*stride+j, 2*(i-1)*stride+j + stride)
-            newKet[2*(i-1)*stride+j] = cos1*spinKet[2*(i-1)*stride+j] + im*sin1*spinKet[2*(i-1)*stride+j + stride]
-            newKet[2*(i-1)*stride+j + stride]  = im*sin1*spinKet[2*(i-1)*stride+j] + cos1*spinKet[2*(i-1)*stride+j + stride]
+            newKet[2*(i-1)*stride+j] = cos1*spinKet[2*(i-1)*stride+j] + 
+                                            im*sin1*spinKet[2*(i-1)*stride + j + stride]
+            newKet[2*(i-1)*stride+j + stride]  = im*sin1*spinKet[2*(i-1)*stride+j] +
+                                            cos1*spinKet[2*(i-1)*stride+j + stride]
         end
     end
 
@@ -106,7 +108,13 @@ Calculate level spacing ratios (LSRs) of a list of eigenvalues (not necessarily 
         sortedvals[i] = sortedvals[i+1] - sortedvals[i]
     end
     for i in 1:length(sortedvals)-2
-        sortedvals[i] = min(sortedvals[i],sortedvals[i+1])/max(sortedvals[i],sortedvals[i+1])
+        if sortedvals[i] > sortedvals[i+1]
+            sortedvals[i] = sortedvals[i+1]/sortedvals[i]
+        elseif sortedvals[i+1] > sortedvals[i] 
+            sortedvals[i] = sortedvals[i]/sortedvals[i+1]
+        else
+            sortedvals[i] = 1.0
+        end
     end
     return mean(sortedvals[1:end-2])
 end
@@ -305,9 +313,9 @@ function getBasis(L)
 end
 
 "
-    avgLevelSpacings(niters, nperiods, spins, ε, J0, σJ, σH; t=0.0, BCs='open')
+    avgLevelSpacings(niters, spins, ε, J0, σJ, σH; t=0.0, BCs='open')
 Calculate ``niters`` of the level spacing ratios. Return the average LSR overall."
-@timeit to function avgLevelSpacings(niters, nperiods, spins, ε, J0, σj, σh; t=0.0, BCs="open")
+@timeit to function avgLevelSpacings(niters, spins, ε, J0, σj, σh; t=0.0, BCs="open")
     L = length(spins)
     Hspace = zeros(ComplexF64, 2^L, 2^L)
     Hspace2 = Hermitian(zeros(ComplexF64, 2^L, 2^L))
@@ -323,10 +331,8 @@ Calculate ``niters`` of the level spacing ratios. Return the average LSR overall
     for i in 1:niters
         @timeit to "matmul" Hspace2 = Array(u1*IsingefficU2(Hspace,hs[i,:],js[i,:],jIsingTensor,hTensor, BCs=BCs))
         @timeit to "eigs" vals = eigvals!(Hspace2)
-        #vals = Real.(diag(Array(efficientHam(Hspace,hs[i,:],js[i,:],jIsingTensor,hTensor; BCs=BCs))))
-        #println(vals)
+        
         rats[i] = levelspacing( mod.(Real.(round.(log.(vals) .* im,digits=8)), 2*pi) )
-        #rats[i] = levelspacing( vals )
         if i % (niters/10) == 0
             #println("Finished $i th iteration out of $niters")
         end
@@ -347,31 +353,30 @@ function LsrsOverParamRange(param, Lrange; BCs)
     elseif param == "sigH"
         paramRange = 10 .^ collect(range(-2,2;step=0.4))
     else
-        error("Parameter not correctly specificied!")
+        error("Parameter not correctly specified!")
     end
     n = length(paramRange)
     lsrs = zeros(length(Lrange), n)
 
     niter = 1000
-    nperiods = 1000
     J0 = pi/4
-    σJ = pi/2
+    σJ = pi/8
     σH  = pi/50
     ε = 0.1
     i = 1
 
     for l in Lrange
         println("Starting L=",l)
-        for (j,param) in enumerate(paramRange) 
+        for (j,paramValue) in enumerate(paramRange) 
             if param == "eps"
-                ε = param
+                ε = paramValue
             elseif param == "j"
-                J0 = param
+                J0 = paramValue
             elseif param == "sigH"
-                σH = param
+                σH = paramValue
             end
             init = rand([0,1], l)
-            lsrs[i,j] = avgLevelSpacings(niter, nperiods, init, ε, J0, σJ, σH ; BCs=BCs)
+            lsrs[i,j] = avgLevelSpacings(niter, init, ε, J0, σJ, σH ; BCs=BCs)
             println("Finished $j th data point out of $n ($niter iterations each point)")
         end
         i += 1

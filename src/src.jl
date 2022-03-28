@@ -342,23 +342,23 @@ Calculate ``niters`` of the level spacing ratios. Return the average LSR overall
 end
 
 "
-    LsrsOverParamRange(param, Lrange; BCs)
-Calculate LSRs over a parameter range (``param={'eps','j','sigH'}``). Done for several values of L (``Lrange``). Boundary conditions (``BCs={'open','periodic'}``) optional."
-function LsrsOverParamRange(param, Lrange; BCs)
+    LsrsOverParamRange(npoints, niters, param, Lrange; BCs)
+Calculate LSRs for ``npoints`` points over a parameter range (``param={'eps','j','sigH'}``), averaging each point over ``niters`` times. Done for several values of L (``Lrange``). Boundary conditions (``BCs={'open','periodic'}``) optional."
+function LsrsOverParamRange(npoints, niters, param, Lrange; BCs)
 
     if param == "eps"
-        paramRange = range(0.0, 1.0, step=0.05)
+        paramRange = range(0.0, 1.0, length=npoints)
     elseif param == "j"
-        paramRange = 10 .^ collect(range(-2,1.5;step=0.2))
+        paramRange = 10 .^ collect(range(-2,1.5; length=npoints))
     elseif param == "sigH"
-        paramRange = 10 .^ collect(range(-2,2;step=0.4))
+        paramRange = 10 .^ collect(range(-2,2; length=npoints))
     else
         error("Parameter not correctly specified!")
     end
     n = length(paramRange)
     lsrs = zeros(length(Lrange), n)
 
-    niter = 1000
+    niter = niters
     J0 = pi/4
     σJ = pi/8
     σH  = pi/50

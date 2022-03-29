@@ -33,6 +33,12 @@ using DTC, Test, LinearAlgebra, Statistics
         @test DTC.getBasis(3) == complex.([-1 -1 -1; -1 -1 +1; -1 +1 -1; -1 +1 +1;
                                            +1 -1 -1; +1 -1 +1; +1 +1 -1; +1 +1 +1])
     end
+    @testset "getJsAndHs" begin
+        testParams = DTC.getJsAndHs(10, 5, 1.0, 0.0, "discrete", 3.0, 0.0, "normal")
+        @test size(testParams[1]) == (10, 5) == size(testParams[2])
+        @test all(map(isequal(1.0), testParams[1]))
+        @test all(map(isequal(3.0), testParams[2]))
+    end
     @testset "getKet" begin
         @test DTC.getKet([1,0,1]) == complex.([0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0] )
         @test DTC.getKet([0,0,1]) == complex.([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
@@ -71,7 +77,7 @@ using DTC, Test, LinearAlgebra, Statistics
         spins[1] ≈ 0.9586187956175708
     end
     @testset "effAvgAutoCor" begin
-        @test isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0], 0.10, 1.0, 0.10, 2.0)[1][:,end]),   0.8177; atol=0.02)
+        @test isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0]; ε=0.10, J0=1.0, σj=0.10, J_dist="discrete", σh=2.0)[1][:,end]),   0.8177; atol=0.02)
     end
     @testset "U1" begin
         @test U1(2,0.0) == complex.([0.0 0.0 0.0 -1.0; 

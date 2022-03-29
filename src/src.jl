@@ -220,9 +220,9 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
 end
 
 "
-    getHsAndJs(niters, L, J0, σJ, σH)
+    getJsAndHs(niters, L, J0, σJ, J_dist, h0, σh, h_dist)
 Sample distribution ``niter*L`` times. Return Hmatrix (``niters x L``) and J matrix (``niters x L``)"
-function getHsAndJs(niters, L, J0, σj, σh)
+function getJsAndHs(niters, L, J0, σj, J_dist, h0, σh, h_dist)
     hs = zeros(niters, L)
     js = zeros(niters, L)
     M = 8
@@ -230,21 +230,37 @@ function getHsAndJs(niters, L, J0, σj, σh)
 
     for i in eachindex(hs)
         if σh > 0.0
-            hs[i] = rand(Normal(0.0, σh))
+            if lowercase(h_dist) == "normal"
+                hs[i] = rand(Normal(h0, σh))
+            elseif lowercase(h_dist) == "uniform"
+                hs[i] = rand(Uniform(h0-σh, h0+σh))
+            else
+                error("No supported distribution for onsite disorder given.")
+                return nothing
+            end
         else
-            hs[i] = 0.0
+            hs[i] = h0
         end
     end
 
     for i in eachindex(js)
         if σj > 0.0
-            js[i] = rand(discrete_Jrange)
+            if lowercase(J_dist) == "normal"
+                js[i] = rand(Normal(J0, σj))
+            elseif lowercase(J_dist) == "uniform"
+                js[i] = rand(Uniform(J0-σj, J0+σj))
+            elseif lowercase(J_dist) == "discrete"
+                js[i] = rand(discrete_Jrange)
+            else
+                error("No supported distribution for nearest neighbor disorder given.")
+                return nothing
+            end
         else
             js[i] = J0
         end
     end
 
-    return hs, js
+    return js, hs
 end
 
 @timeit to function U1(L, ε)
@@ -265,9 +281,9 @@ end
 end
 
 "
-    effAvgAutoCor(niters, nperiods, spins, ε, J0, σJ, σH; t, BCs)
+    effAvgAutoCor(niters, nperiods, spins; ε, J0, σJ, J_dist, h0=0.0, σH, H_dist, t=0.0, BCs='open', verbose=false)
 Exact same as autocorrelator, except average over ``niters`` simulations. Return ``cors`` and ``allSpins``, which are both ``2^L x L`` matrices "
-@timeit to function effAvgAutoCor(niters, nperiods, spins, ε, J0, σj, σh; t=0.0, BCs="open")
+@timeit to function effAvgAutoCor(niters, nperiods, spins; ε, J0, σj, J_dist="normal", h0=0.0, σh, H_dist="normal", t=0.0, BCs="open", verbose=false)
     if BCs != "open" && BCs != "periodic"
         error("Boundary conditions must be 'open' or 'periodic' !")
     end
@@ -276,7 +292,7 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     Hspace = spzeros(ComplexF64, 2^L, 2^L)
     negOneSpins = replace(spins, 0 => -1)
 
-    hs, js = getHsAndJs(niters, L, J0, σj, σh)
+    js, hs =getJsAndHs(niters, L, J0, σj, J_dist, h0, σh, H_dist)
 
     
     cors = zeros(L, nperiods+1)
@@ -289,7 +305,7 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
 
     for i in 1:niters
         allKets += autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; BCs=BCs), nperiods)
-        if i % (niters/10) == 0
+        if i % (niters/10) == 0  && verbose == true
             println("Finished ",i,"th iteration")
         end
     end
@@ -313,14 +329,14 @@ function getBasis(L)
 end
 
 "
-    avgLevelSpacings(niters, spins, ε, J0, σJ, σH; t=0.0, BCs='open')
+    avgLevelSpacings(niters, spins; ε, J0, σJ, J_dist, h0=0.0, σH, H_dist, t=0.0, BCs='open')
 Calculate ``niters`` of the level spacing ratios. Return the average LSR overall."
-@timeit to function avgLevelSpacings(niters, spins, ε, J0, σj, σh; t=0.0, BCs="open")
+@timeit to function avgLevelSpacings(niters, spins; ε, J0, σj, J_dist, h0=0.0, σh, H_dist, t=0.0, BCs="open")
     L = length(spins)
     Hspace = zeros(ComplexF64, 2^L, 2^L)
     Hspace2 = Hermitian(zeros(ComplexF64, 2^L, 2^L))
 
-    hs, js = getHsAndJs(niters, L, J0, σj, σh)
+    js, hs =getJsAndHs(niters, L, J0, σj, J_dist, h0, σh, H_dist)
     rats = zeros(niters)
     jIsingTensor = getIsingNNJtensor(L)
     hTensor = getHtensor(L)            # more of the time
@@ -361,8 +377,12 @@ function LsrsOverParamRange(npoints, niters, param, Lrange; BCs)
     niter = niters
     J0 = pi/4
     σJ = pi/8
+    J_dist="discrete"
+    h0 = 0.0
     σH  = pi/50
+    H_dist="normal"
     ε = 0.1
+
     i = 1
 
     for l in Lrange
@@ -376,7 +396,7 @@ function LsrsOverParamRange(npoints, niters, param, Lrange; BCs)
                 σH = paramValue
             end
             init = rand([0,1], l)
-            lsrs[i,j] = avgLevelSpacings(niter, init, ε, J0, σJ, σH ; BCs=BCs)
+            lsrs[i,j] = avgLevelSpacings(niter, init; ε=ε, J0=J0, σj=σJ, J_dist=J_dist, h0=h0, σh=σH, H_dist=H_dist, BCs=BCs)
             println("Finished $j th data point out of $n ($niter iterations each point)")
         end
         i += 1

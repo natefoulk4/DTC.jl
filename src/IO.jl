@@ -3,39 +3,41 @@ using Plots, FFTW
 
 
 "
-    plotter(effAvgResult; which={'worst', 'average', 'all'} )
+    plotter(effAvgResult; which={Int, 'worst', 'average', 'all'} )
 Plot the autocorrelator of the DTC for the ``which`` qubit. ``'all'`` is not yet supported."
 function plotter(effAvgResult; which="worst")
-    allres, spinmap = effAvgResult
-    worst_qubit = findmin(mean(allres[:,1:2:end,:], dims=(2,3))[:])[2]
-    this_qubit = which == "worst" ? worst_qubit : which
+    if length(size(effAvgResult[1])) == 2
+        allres, spinmap = effAvgResult
+        worst_qubit = findmin(mean(allres[:,1:2:end,:], dims=(2,3))[:])[2]
+        this_qubit = which == "worst" ? worst_qubit : which
 
-    if typeof(this_qubit) == Int
-        realres = allres[this_qubit,:]
-    elseif which == "average"
-        realres = mean(allres, dims=1)[:]
-    elseif which == "all"
-        println("FIXME. Plot all qubits.")
-        return nothing
+        if typeof(this_qubit) == Int
+            realres = allres[this_qubit,:]
+        elseif lowercase(which) == "average"
+            realres = mean(allres, dims=1)[:]
+        elseif lowercase(which) == "all"
+            println("FIXME. Plot all qubits.")
+            return nothing
+        end
+    elseif length(size(effAvgResult[1])) == 1 # Legacy support
+        realres, spinmap = effAvgResult
+        L = size(spinmap)[1]
+        this_qubit = Int(round(L/2))
     end
     L = size(spinmap)[1]
     nperiods = size(spinmap)[2]
     res = abs.(fft(realres))
-    if which == "all"
-        println("FIXME. Plot all qubits")
-        return nothing
-    else
-        plotly()
-        l = @layout [a b ; c{0.2h}; d{0.2h}] 
-        plot(realres, opacity=0.5, xscale=:log10, legend=false)
-        plot!(collect(1:2:nperiods),realres[1:2:nperiods])
-        p1 = plot!([1; collect(2:2:nperiods)],[-1.0 ; realres[2:2:nperiods]], title = string("Qubit #",this_qubit))
-        p21 = plot(res, yscale =:log10, ylims=(0.1,350), legend=false)
-        p3 = heatmap(spinmap[:,1:30], c=:viridis, clims=(-1,1))
-        howitsgoing = nperiods < 1030 ? ((nperiods-29):nperiods) : 1001:1030
-        p4 = heatmap(collect(howitsgoing), collect(1:L), spinmap[:,howitsgoing], c=:viridis, clims=(-1,1))#print(spinmap[:,1001:1030])
-        plot(p1, p21, p3, p4, layout=l)
-    end
+    plotly()
+    l = @layout [a b ; c{0.2h}; d{0.2h}] 
+    plot(realres, opacity=0.5, xscale=:log10, legend=false)
+    plot!(collect(1:2:nperiods),realres[1:2:nperiods])
+    p1 = plot!([1; collect(2:2:nperiods)],[-1.0 ; realres[2:2:nperiods]], title = string("Qubit #",this_qubit))
+    p21 = plot(res, yscale =:log10, ylims=(0.1,350), legend=false)
+    p3 = heatmap(spinmap[:,1:30], c=:viridis, clims=(-1,1))
+    howitsgoing = nperiods < 1030 ? ((nperiods-29):nperiods) : 1001:1030
+    p4 = heatmap(collect(howitsgoing), collect(1:L), spinmap[:,howitsgoing], c=:viridis, clims=(-1,1))#print(spinmap[:,1001:1030])
+    plot(p1, p21, p3, p4, layout=l)
+
 end
 
 plotter(effAvgResult1, effAvgResult2) = plotter((effAvgResult1, effAvgResult2))

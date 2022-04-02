@@ -44,9 +44,27 @@ Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n(φ) (on 
 end
 
 "
-    getIsingNNJtensor(L)
+    Rz(n, φ, spinKet, newKet)
+Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^z_n(φ) (on the ``n``th qubit). Return ``newKet``"
+@timeit to function Rz(n::Int, φ::Real, spinKet::Vector{ComplexF64}, newKet::Vector{ComplexF64})
+    L = Int(log2(length(spinKet)))
+    stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
+    stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+
+    for i in 1:stride2
+        for j in 1:stride
+            newKet[2*(i-1)*stride+j] = round(exp(im*φ)*spinKet[2*(i-1)*stride+j], digits=15)
+            newKet[2*(i-1)*stride+j + stride]  = round(exp(-im*φ)*spinKet[2*(i-1)*stride+j + stride], digits=15)
+        end
+    end
+
+    return newKet
+end
+
+"
+    getIsingJtensor(L)
 Return ``2^L x L`` matrix, where the ``n``th column contains the approriate signs for the diagonal of the J\\_n matrix. _Ising model only._"
-@timeit to function getIsingNNJtensor(L)
+@timeit to function getIsingJtensor(L)
     diagonals = fill(1.0 + 0.0im, (2^L,L))
     for n in 1:L # n is the nth exchange coupling (J_{n, n+1})
         stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n = 2, 8 if n=1
@@ -79,6 +97,32 @@ Return ``2^L x L`` matrix, where the ``n``th column contains the approriate sign
     diagonals[1:2^(L-1), L] *= -1.0
 
     return diagonals
+end
+
+"
+    getHeisenCoords(L)
+    Return the coordinates of the heisenberg non-diagonal elements of the hamiltonian."
+function getHeisenCoords(L)
+    coords = zeros(Int64, (2, 2^(L-2), L))
+
+    for n in 1:L-1
+        k=1
+        for j in 1:2^(L-n-1)
+            for i in 1:2^(n-1) 
+                stride = 2^(n+1)
+                coords[1,k,n] = 2^(n-1) + (j-1)*stride + i
+                coords[2,k,n] = 2^(n) + (j-1)*stride + i
+                k += 1
+            end
+        end
+    end
+
+    for i in 1:2^(L-2)
+        coords[1,i,L] = 2*i
+        coords[2,i,L] = 2*i + 2^(L-1) - 1
+    end
+
+    return coords
 end
 
 "
@@ -120,25 +164,43 @@ Calculate level spacing ratios (LSRs) of a list of eigenvalues (not necessarily 
 end
 
 "
-    efficientHam(Hspace, hs, js, jMat, hTensor; BCs)
+    efficientHam(Hspace, hs, js, jMat, hTensor; tCoords=nothing, theta, BCs)
 Multiply each J and H columns of ``jMat`` and ``hTensor`` by the appropriate prefactors contained in ``js`` and ``hs``. Add them together and assign them to the diagonal of ``Hspace``, overwriting ``Hspace`` completely. Return ``Hspace``. keyword: ``BCs={'open', 'periodic'}``"
-@timeit to function efficientHam(Hspace, hs, js, jMat, hTensor; BCs)
+@timeit to function efficientHam(Hspace, hs, js, jMat, hTensor; tCoords=nothing, theta, BCs)
     L = Int(log2(size(Hspace)[1]))
     for i in 1:2^L
         Hspace[i,i] = 0.0 + 0.0im
     end
     if BCs == "open"
-        for j in 1:L-1, n in 1:2^L
-            Hspace[n,n] += (js[j] * jMat[n,j])
+        for n in 1:L-1 
+            for j in 1:2^L
+                Hspace[j,j] += (js[n] * jMat[j,n])
+            end
+            if theta != 0.0
+                for k in 1:2^(L-2)
+                    Hspace[tCoords[1,k,n], tCoords[2,k,n]] += js[n]*2.0*theta
+                    Hspace[tCoords[2,k,n], tCoords[1,k,n]] += js[n]*2.0*theta
+                end
+            end 
         end
     elseif BCs == "periodic"
-        for j in 1:L, n in 1:2^L
-            Hspace[n,n] += (js[j] * jMat[n,j])
+        for n in 1:L
+            for j in 1:2^L
+                Hspace[j,j] += (js[n] * jMat[j,n])
+            end
+            if theta != 0.0
+                for k in 1:2^(L-2)
+                    Hspace[tCoords[1,k,n], tCoords[2,k,n]] += js[n]*2.0*theta
+                    Hspace[tCoords[2,k,n], tCoords[1,k,n]] += js[n]*2.0*theta
+                end
+            end 
         end
     end
+
     for j in 1:L, n in 1:2^L
         Hspace[n,n] += hs[j] * hTensor[n,j]
     end
+    #show(stdout, "text/plain", round.(Float64.(Array(Hspace)),digits=2))
     return Hspace
 end
 
@@ -172,13 +234,19 @@ end
 "
     IsingefficU2(Hspace, hs, jz, jArrays, hTensor; BCs='open')
 Given memory ``Hspace``, call ``efficientHam`` and then exponentiate the diagonal elements in-place. Return Hspace as U2, the MBL unitary."
-@timeit to function IsingefficU2(Hspace, hs, js, jMat, hTensor; BCs="open") 
-    efficientHam(Hspace, hs, js, jMat, hTensor; BCs=BCs)
-    for i in 1:size(Hspace)[1]
-        Hspace[i,i] = exp(-im*Hspace[i,i])
+@timeit to function IsingefficU2(Hspace, hs, js, jMat, hTensor; tCoords=nothing, t=0.0, BCs="open", num_H2I=0) 
+    efficientHam(Hspace, hs, js, jMat, hTensor; tCoords=tCoords, theta=t, BCs=BCs)
+    if t == 0.0
+        for i in 1:size(Hspace)[1]
+            Hspace[i,i] = exp(-im*Hspace[i,i])
+        end
+        return Hspace
+    elseif num_H2I % 2 == 0
+        denom = num_H2I > 0 ? num_H2I : 1
+        return sparse(exp(Array(-im.*Hspace ./ denom)))
+    else
+        error("theta and num_H2I are incorrectly specified!!")
     end
-    return Hspace
-    #return exp(-im.*efficientHam(Hspace, hs, js, jTensor, hTensor))
 end
 
 "
@@ -189,7 +257,7 @@ matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 "
     autocorrelator(spins, basis, eps, U2, N)
 Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return a matrix of all the kets (``2^L`` x ``N+1``)."
-@timeit to function autocorrelator(spins, basis, eps, U2, N)
+@timeit to function autocorrelator(spins, basis, eps, U2, N; num_H2I=0)
     initKet = getKet(spins)
     L = length(spins)
 
@@ -207,8 +275,23 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
             Rx(k, pi/2*(1-eps), currentKet, interKet)
             interKet, currentKet = currentKet, interKet
         end
-
-        @timeit to "U2 mul" mul!(newKet,U2,currentKet)
+        if num_H2I > 0
+            for k in  1:Int(num_H2I/2)
+                 mul!(interKet,U2,currentKet)
+                 for j in 1:2:L
+                    Rz(j, -pi/2, interKet, currentKet)
+                    interKet, currentKet = currentKet, interKet
+                end
+                mul!(currentKet,U2,interKet)
+                for j in 1:2:L
+                   Rz(j, pi/2, currentKet, interKet)
+                   interKet, currentKet = currentKet, interKet
+               end
+            end
+            newKet .= currentKet
+        else
+            @timeit to "U2 mul" mul!(newKet,U2,currentKet)
+        end
     
         allKets[:,i] = newKet
         currentKet, newKet = newKet, currentKet
@@ -283,7 +366,7 @@ end
 "
     effAvgAutoCor(niters, nperiods, spins; ε, J0, σJ, J_dist, h0=0.0, σH, H_dist, t=0.0, BCs='open', verbose=false)
 Exact same as autocorrelator, except average over ``niters`` simulations. Return ``cors`` and ``allSpins``, which are both ``2^L x L`` matrices "
-@timeit to function effAvgAutoCor(niters, nperiods, spins; ε, J0, σj, J_dist="normal", h0=0.0, σh, H_dist="normal", t=0.0, BCs="open", verbose=false)
+@timeit to function effAvgAutoCor(niters, nperiods, spins; ε, J0, σj, J_dist="normal", h0=0.0, σh, H_dist="normal", t=0.0, BCs="open", num_H2I=0, verbose=false)
     if BCs != "open" && BCs != "periodic"
         error("Boundary conditions must be 'open' or 'periodic' !")
     end
@@ -298,13 +381,14 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     cors = zeros(L, nperiods+1)
     allSpins = zeros(L, nperiods+1)
     @timeit to "initializing allKets" allKets = zeros(2^L, nperiods+1)
-    jIsingTensor = getIsingNNJtensor(L)
+    jIsingTensor = getIsingJtensor(L)
+    thetaCoords = t == 0.0 ? nothing : getHeisenCoords(L)
     hTensor = getHtensor(L)            # more of the time
-
     basis = getBasis(L)
 
     for i in 1:niters
-        allKets += autocorrelator(spins, basis, ε, IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; BCs=BCs), nperiods)
+        u2 = IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; tCoords=thetaCoords, t=t, BCs=BCs, num_H2I=num_H2I)
+        allKets += autocorrelator(spins, basis, ε, u2, nperiods; num_H2I=num_H2I)
         if i % (niters/10) == 0  && verbose == true
             println("Finished ",i,"th iteration")
         end
@@ -338,7 +422,7 @@ Calculate ``niters`` of the level spacing ratios. Return the average LSR overall
 
     js, hs =getJsAndHs(niters, L, J0, σj, J_dist, h0, σh, H_dist)
     rats = zeros(niters)
-    jIsingTensor = getIsingNNJtensor(L)
+    jIsingTensor = getIsingJtensor(L)
     hTensor = getHtensor(L)            # more of the time
 
     u1 = U1(L, ε)

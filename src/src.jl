@@ -168,9 +168,7 @@ end
 Multiply each J and H columns of ``jMat`` and ``hTensor`` by the appropriate prefactors contained in ``js`` and ``hs``. Add them together and assign them to the diagonal of ``Hspace``, overwriting ``Hspace`` completely. Return ``Hspace``. keyword: ``BCs={'open', 'periodic'}``"
 @timeit to function efficientHam(Hspace, hs, js, jMat, hTensor; tCoords=nothing, theta, BCs)
     L = Int(log2(size(Hspace)[1]))
-    for i in 1:2^L
-        Hspace[i,i] = 0.0 + 0.0im
-    end
+    Hspace .= 0.0 + 0.0im
     if BCs == "open"
         for n in 1:L-1 
             for j in 1:2^L
@@ -395,7 +393,7 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     end
 
     @timeit to "averaging over iters" allKets = allKets ./ niters
-    @timeit to "getting spins" allSpins = basis' * allKets[:,:,1]
+    @timeit to "getting spins" allSpins = basis' * allKets
     @timeit to "getting cors" cors = allSpins .* negOneSpins
 
     return cors, allSpins

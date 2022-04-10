@@ -22,7 +22,7 @@ end
 "
     Rx(n, φ, spinKet, newKet)
 Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^x_n(φ) (on the ``n``th qubit). Return ``newKet``"
-@timeit to function Rx(n::Int, φ::Real, spinKet::Vector{ComplexF64}, newKet::Vector{ComplexF64})
+function Rx(n::Int, φ::Real, spinKet::Vector{ComplexF64}, newKet::Vector{ComplexF64})
     L = Int(log2(length(spinKet)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
     stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
@@ -46,15 +46,17 @@ end
 "
     Rz(n, φ, spinKet, newKet)
 Operate on ``spinKet`` (length ``2^L``) with the rotation unitary R^z_n(φ) (on the ``n``th qubit). Return ``newKet``"
-@timeit to function Rz(n::Int, φ::Real, spinKet::Vector{ComplexF64}, newKet::Vector{ComplexF64})
+function Rz(n::Int, φ::Real, spinKet::Vector{ComplexF64}, newKet::Vector{ComplexF64})
     L = Int(log2(length(spinKet)))
     stride =  2^(L-n)   # 1 if n=4, 2 if n=3, 4 if n=2, 8 if n = 1
     stride2 = 2^(n-1)   # 8 if n=4, 4 if n=3, 2 if n=2, 1 if n = 1
+    exp1 = exp(im*φ)
+    exp2 = exp(-im*φ)
 
     for i in 1:stride2
         for j in 1:stride
-            newKet[2*(i-1)*stride+j] = round(exp(im*φ)*spinKet[2*(i-1)*stride+j], digits=15)
-            newKet[2*(i-1)*stride+j + stride]  = round(exp(-im*φ)*spinKet[2*(i-1)*stride+j + stride], digits=15)
+            newKet[2*(i-1)*stride+j] = exp1*spinKet[2*(i-1)*stride+j]
+            newKet[2*(i-1)*stride+j + stride]  = exp2*spinKet[2*(i-1)*stride+j + stride]
         end
     end
 
@@ -267,7 +269,8 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
     end
 
     allKets[:,1] = currentKet
-     for i in 2:N+1
+    for i in 2:N+1
+        @timeit to "Rx,Rz, and U2" begin
         for k in 1:L
             #mul!(interKet, U1s[k], currentKet)
             Rx(k, pi/2*(1-eps), currentKet, interKet)
@@ -288,9 +291,9 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
             end
             newKet .= currentKet
         else
-            @timeit to "U2 mul" mul!(newKet,U2,currentKet)
+            mul!(newKet,U2,currentKet)
         end
-    
+        end
         allKets[:,i] = newKet
         currentKet, newKet = newKet, currentKet
     end

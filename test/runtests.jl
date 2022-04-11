@@ -77,8 +77,10 @@ using DTC, Test, LinearAlgebra, Statistics
         spins[1] ≈ 0.9586187956175708
     end
     @testset "effAvgAutoCor" begin
-        @test isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0]; ε=0.10, J0=1.0, σj=0.10, J_dist="discrete", σh=2.0, t=0.0)[1][:,end]),   0.8177; atol=0.02)
-        @test effAvgAutoCor(1,200, [1,0,1,0]; ε=0.1, J0=pi/4, σj=0.0, h0=0.05, σh=0.0, t=1.0, num_H2I=64, BCs="open")[1][1,end] ≈ 0.9406572121389324
+        @test isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0]; ε=0.10, J0=1.0, σj=0.10, J_dist="discrete", H_dist="normal", σh=2.0, t=0.0)[1][:,end]),   0.8177; atol=0.02)
+        @test isapprox(mean(effAvgAutoCor(2000, 300, [1,0,1,0]; ε=0.10, J0=1.0, σj=0.10, J_dist="discrete", H_dist="normal", σh=2.0, t=0.0, diagonalization=true)[1][:,end]),   0.8177; atol=0.02)
+        @test effAvgAutoCor(1,200, [1,0,1,0]; ε=0.1, J0=pi/4, σj=0.0, h0=0.05, σh=0.0, t=1.0, num_H2I=64, J_dist="normal", H_dist="normal", BCs="open")[1][1,end] ≈ 0.9406572121389324
+        @test effAvgAutoCor(1,200, [1,0,1,0]; ε=0.1, J0=pi/4, σj=0.0, h0=0.05, σh=0.0, t=1.0, num_H2I=64, J_dist="normal", H_dist="normal", BCs="open", diagonalization=true)[1][1,end] ≈ 0.9406572121389324
     end
     @testset "U1" begin
         @test U1(2,0.0) == complex.([0.0 0.0 0.0 -1.0; 

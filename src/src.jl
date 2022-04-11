@@ -257,7 +257,7 @@ matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 "
     autocorrelator(spins, basis, eps, U2, N)
 Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return a matrix of all the kets (``2^L`` x ``N+1``)."
-@timeit to function autocorrelator(spins, basis, eps, U2, N; num_H2I=0)
+@timeit to function autocorrelator(spins, basis, eps, U2, N; num_H2I=0, d)
     initKet = getKet(spins)
     L = length(spins)
 
@@ -268,34 +268,63 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
         newKet = zeros(ComplexF64, 2^L)
     end
 
-    allKets[:,1] = currentKet
-    for i in 2:N+1
-        @timeit to "Rx,Rz, and U2" begin
-        for k in 1:L
-            #mul!(interKet, U1s[k], currentKet)
-            Rx(k, pi/2*(1-eps), currentKet, interKet)
-            interKet, currentKet = currentKet, interKet
-        end
-        if num_H2I > 0
-            for k in  1:Int(num_H2I/2)
-                 mul!(interKet,U2,currentKet)
-                 for j in 1:2:L
-                    Rz(j, -pi/2, interKet, currentKet)
+
+    @timeit to "Rx,Rz, and U2" begin
+        if d 
+            vals = zeros(ComplexF64, 2^L)
+            bigU = zeros(ComplexF64, (2^L,2^L))
+            u1 = U1(L, eps)
+            if num_H2I > 0
+                bigU = u1
+                for k in 1:Int(num_H2I/2)
+                    bigU = U2*bigU
+                    bigU = Uz(L, -pi/2)*bigU
+                    bigU = U2*bigU
+                    bigU = Uz(L, pi/2)*bigU
+                end
+            else
+                bigU = U2*u1
+            end
+
+            @timeit to "eigen" factorization = eigen(bigU)
+            vals .= factorization.values
+            currentKet = transpose(conj.(factorization.vectors)) * currentKet
+            allKets[:,1] .= currentKet
+            for i in 2:N+1
+                currentKet .=  vals .* currentKet
+                allKets[:,i] .= currentKet
+            end
+
+            @timeit to "matmul at end" allKets = factorization.vectors * allKets
+        else 
+            allKets[:,1] = currentKet
+            for i in 2:N+1
+                for k in 1:L
+                    #mul!(interKet, U1s[k], currentKet)
+                    Rx(k, pi/2*(1-eps), currentKet, interKet)
                     interKet, currentKet = currentKet, interKet
                 end
-                mul!(currentKet,U2,interKet)
-                for j in 1:2:L
-                   Rz(j, pi/2, currentKet, interKet)
-                   interKet, currentKet = currentKet, interKet
-               end
+                if num_H2I > 0
+                    for k in  1:Int(num_H2I/2)
+                        mul!(interKet,U2,currentKet)
+                        for j in 1:2:L
+                            Rz(j, -pi/2, interKet, currentKet)
+                            interKet, currentKet = currentKet, interKet
+                        end
+                        mul!(currentKet,U2,interKet)
+                        for j in 1:2:L
+                            Rz(j, pi/2, currentKet, interKet)
+                            interKet, currentKet = currentKet, interKet
+                        end
+                    end
+                    newKet .= currentKet
+                else
+                    mul!(newKet,U2,currentKet)
+                end
+                allKets[:,i] = newKet
+                currentKet, newKet = newKet, currentKet
             end
-            newKet .= currentKet
-        else
-            mul!(newKet,U2,currentKet)
         end
-        end
-        allKets[:,i] = newKet
-        currentKet, newKet = newKet, currentKet
     end
 
     allKets = abs2.(allKets)
@@ -364,14 +393,34 @@ end
     return round.(mat2, digits=15)
 end
 
+@timeit to function Uz(L, φ)
+    mat1 = zeros(ComplexF64, (2^L, 2^L))
+    mat2 = UniformScaling(1)
+    ket1 = zeros(ComplexF64, 2^L)
+    ket2 = zeros(ComplexF64, 2^L)
+    for n in 1:2:L
+        for i in 1:2^L
+            ket1 .= 0.0+0.0im
+            ket1[i] = 1.0+0.0im
+            Rz(n, φ, ket1, ket2)
+            mat1[:,i] = ket2
+        end
+        mat2 = mat1 * mat2 
+    end
+    return round.(mat2, digits=15)
+end
+
 "
     effAvgAutoCor(niters, nperiods, spins; ε, J0, σJ, J_dist, h0=0.0, σH, H_dist, t=0.0, BCs='open', verbose=false)
 Exact same as autocorrelator, except average over ``niters`` simulations. Return ``cors`` and ``allSpins``, which are both ``2^L x L`` matrices "
-@timeit to function effAvgAutoCor(niters, nperiods, spins; ε, J0, σj, J_dist="normal", h0=0.0, σh, H_dist="normal", t=0.0, BCs="open", num_H2I=0, verbose=false)
+@timeit to function effAvgAutoCor(niters, nperiods, spins; ε, J0, σj, J_dist="normal", h0=0.0, σh, H_dist="normal", t=0.0, BCs="open", num_H2I=0, diagonalization=true, verbose=false)
     if BCs != "open" && BCs != "periodic"
         error("Boundary conditions must be 'open' or 'periodic' !")
     end
     #nothing
+    if t == 0.0
+        numH2I = 0
+    end
     L = length(spins)
     Hspace = spzeros(ComplexF64, 2^L, 2^L)
     negOneSpins = replace(spins, 0 => -1)
@@ -389,7 +438,7 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
 
     for i in 1:niters
         u2 = IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; tCoords=thetaCoords, t=t, BCs=BCs, num_H2I=num_H2I)
-        allKets += autocorrelator(spins, basis, ε, u2, nperiods; num_H2I=num_H2I)
+        allKets += autocorrelator(spins, basis, ε, u2, nperiods; num_H2I=num_H2I, d=diagonalization)
         if i % (niters/10) == 0  && verbose == true
             println("Finished ",i,"th iteration")
         end

@@ -257,7 +257,7 @@ matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
 "
     autocorrelator(spins, basis, eps, U2, N)
 Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return a matrix of all the kets (``2^L`` x ``N+1``)."
-@timeit to function autocorrelator(spins, basis, eps, U2, N; num_H2I=0, d)
+@timeit to function autocorrelator(spins, basis, eps, U2, N; num_H2I=0, d=false)
     initKet = getKet(spins)
     L = length(spins)
 

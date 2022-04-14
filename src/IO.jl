@@ -94,7 +94,7 @@ function writeArray(filename, arr)
         d = length(size(arr))
         write(f, Int64(d))
         for j in 1:d
-            write(f, Int64(size(arr)[d]))
+            write(f, Int64(size(arr)[j]))
         end
         for i in eachindex(arr)
             write(f, Float64(arr[i]))
@@ -103,7 +103,7 @@ function writeArray(filename, arr)
     return nothing
 end
 
-function readArray(filename, specifyD=0)
+function readArray(filename; specifyD=0)
     open(filename, "r") do f
         if specifyD==0
             d = read(f, Int64)

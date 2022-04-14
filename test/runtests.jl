@@ -96,9 +96,9 @@ end
 
 @testset "IO.jl tests" begin
     @testset "read/write vector" begin
-        writeVector("testfile", [1.0, 2.0, 3.0])
-        @test readVector("testfile") == [1.0, 2.0, 3.0]
+        writeArray("testfile", [1.0, 2.0, 3.0])
+        @test readArray("testfile") == [1.0, 2.0, 3.0]
         rm("testfile")
-        @test_throws SystemError readVector("testfile")
+        @test_throws SystemError readArray("testfile")
     end
 end

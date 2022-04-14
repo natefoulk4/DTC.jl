@@ -89,30 +89,33 @@ function readAutoCor(filename)
     end
 end
 
-"
-    writeVector(filename, vector) 
-Write a vector of floats in binary"
-function writeVector(filename, vector)
+function writeArray(filename, arr)
     open(filename, "w") do f
-        write(f, Int64(length(vector)))
-        for i in eachindex(vector)
-            write(f, Float64(vector[i]))
+        d = length(size(arr))
+        write(f, Int64(d))
+        for j in 1:d
+            write(f, Int64(size(arr)[d]))
+        end
+        for i in eachindex(arr)
+            write(f, Float64(arr[i]))
         end
     end
     return nothing
 end
 
-"
-    readVector(filename) 
-Read a vector of floats in binary"
-function readVector(filename)
+function readArray(filename)
     open(filename, "r") do f
-
-        n = read(f, Int64)
-        vector = zeros(Float64, n)
-        for i in eachindex(vector)
-            vector[i] = read(f, Float64)
+        d = read(f, Int64)
+        sizeVec = zeros(Int64, d)
+        for j in 1:d
+            sizeVec[j] = read(f, Int64)
         end
-        return vector
+        sizeTup = Tuple(sizeVec)
+        arr = zeros(sizeTup)
+        for i in eachindex(arr)
+            arr[i] = read(f, Float64)
+        end
+        return arr
     end
 end
+

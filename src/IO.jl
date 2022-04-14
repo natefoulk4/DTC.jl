@@ -103,15 +103,21 @@ function writeArray(filename, arr)
     return nothing
 end
 
-function readArray(filename)
+function readArray(filename, specifyD=0)
     open(filename, "r") do f
-        d = read(f, Int64)
+        if specifyD==0
+            d = read(f, Int64)
+        else # This is to support reading data that was written with functions that assumed the dimensionality of the data.
+            d = specifyD
+        end
+
         sizeVec = zeros(Int64, d)
         for j in 1:d
             sizeVec[j] = read(f, Int64)
         end
         sizeTup = Tuple(sizeVec)
         arr = zeros(sizeTup)
+
         for i in eachindex(arr)
             arr[i] = read(f, Float64)
         end

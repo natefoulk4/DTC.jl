@@ -482,7 +482,7 @@ Calculate ``niters`` of the level spacing ratios. Return the average LSR overall
         @timeit to "matmul" Hspace2 = Array(u1*IsingefficU2(Hspace,hs[i,:],js[i,:],jIsingTensor,hTensor, BCs=BCs))
         @timeit to "eigs" vals = eigvals!(Hspace2)
         
-        rats[i] = levelspacing( mod.(Real.(round.(log.(vals) .* im,digits=8)), 2*pi) )
+        rats[i] = levelspacing( mod.(Real.(round.(log.(Complex.(vals)) .* im,digits=8)), 2*pi) )
         if i % (niters/10) == 0
             #println("Finished $i th iteration out of $niters")
         end

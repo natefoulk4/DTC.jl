@@ -1,7 +1,35 @@
 
 using LinearAlgebra, Statistics, Distributions, TimerOutputs
 
+const MAX_PERIODS = 10000
 
+function logRange(start, stop; length)
+    return 10 .^ range(log10(start), log10(stop); length=length)
+end
+function logIntRange(start, stop; length)
+    if stop-start+1 < length
+        error("not enough integers in between start and stop")
+    end
+    floatRange = logRange(start, stop; length=length)
+    r = (stop/start)^(1/(length-1))
+    #println("r = ", r)
+    #println("slopes equal at  x = ",1/(r-1))
+    valCross=length
+    for i in eachindex(floatRange)
+        if start + (i-1) < floatRange[i]
+            valCross = i - 1
+            break
+        end
+    end
+    slopeCross = Int(ceil(log(r, 1/start * 1/(r-1))))+1
+    #println("we cross the slope crossover after the ",slopeCross,"th element")
+    #println("we cross the value crossover after the ",valCross,"th element")
+    newStart = max(slopeCross, valCross)
+    #println(1/((stop/start)/(length-1) - 1))
+    linPart= Int.(range(start, start+newStart-1))
+    logPart= Int.(round.(floatRange[newStart+1:end]))
+    return [linPart;  logPart]
+end
 "
 binToBase10(x::Vector{Int})
 Convert a binary vector into a base-10 number."
@@ -258,11 +286,19 @@ matrix_density(mat::Matrix) = length(findall(!iszero,mat))/length(mat)
     autocorrelator(spins, basis, eps, U2, N)
 Simulate the dynamics of a DTC for a given instance of disorder. Take initial state of ``spins`` (length ``L``) and ``basis`` (size ``2^L x L``). Apply Floquet unitaries (using ``eps``, the perturbation of a π pulse, and ``U2``) ``N`` times. Return a matrix of all the kets (``2^L`` x ``N+1``)."
 @timeit to function autocorrelator(spins, basis, eps, U2, N; num_H2I=0, d=false)
-    initKet = getKet(spins)
-    L = length(spins)
+    @timeit to "initial stuff" begin
+        nsize = min(N, MAX_PERIODS)
+        if N > MAX_PERIODS
+            checkpoints = logIntRange(2, N+1; length=MAX_PERIODS)
+        else
+            checkpoints = collect(2:N+1)
+        end
 
-    @timeit to "initializing kets" begin
-        allKets = zeros(ComplexF64, 2^L, N+1)
+        initKet = getKet(spins)
+        L = length(spins)
+
+        allKets = zeros(ComplexF64, 2^L, nsize+1)
+        finalKets = zeros(Float64, 2^L, nsize+1)
         currentKet = deepcopy(initKet)
         interKet = zeros(ComplexF64, 2^L)
         newKet = zeros(ComplexF64, 2^L)
@@ -271,33 +307,46 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
 
     @timeit to "Rx,Rz, and U2" begin
         if d 
-            vals = zeros(ComplexF64, 2^L)
-            bigU = zeros(ComplexF64, (2^L,2^L))
+            @timeit to "inits" begin
+                vals = zeros(ComplexF64, 2^L)
+                bigU = zeros(ComplexF64, (2^L,2^L))
+            end
             u1 = U1(L, eps)
-            if num_H2I > 0
-                bigU = u1
-                for k in 1:Int(num_H2I/2)
-                    bigU = U2*bigU
-                    bigU = Uz(L, -pi/2)*bigU
-                    bigU = U2*bigU
-                    bigU = Uz(L, pi/2)*bigU
+            @timeit to "find bigU" begin
+                if num_H2I > 0
+                    bigU = u1
+                    for k in 1:Int(num_H2I/2)
+                        bigU = U2*bigU
+                        bigU = Uz(L, -pi/2)*bigU
+                        bigU = U2*bigU
+                        bigU = Uz(L, pi/2)*bigU
+                    end
+                else
+                    bigU = U2*u1
                 end
-            else
-                bigU = U2*u1
             end
 
             @timeit to "eigen" factorization = eigen(bigU)
-            vals .= factorization.values
-            currentKet = transpose(conj.(factorization.vectors)) * currentKet
-            allKets[:,1] .= currentKet
-            for i in 2:N+1
-                currentKet .=  vals .* currentKet
-                allKets[:,i] .= currentKet
+            @timeit to "everything else" begin
+                vals .= factorization.values
+                currentKet = transpose(conj.(factorization.vectors)) * currentKet
+                allKets[:,1] .= currentKet
             end
+            @timeit to "U2 diag muls/saving results" begin
+                j = 2
+                for i in 2:N+1
+                    currentKet .=  vals .* currentKet
+                    if i == checkpoints[j-1]
+                        allKets[:,j] .= currentKet
+                        j += 1
+                    end
+                end
+            end 
 
             @timeit to "matmul at end" allKets = factorization.vectors * allKets
         else 
             allKets[:,1] = currentKet
+            j = 2
             for i in 2:N+1
                 for k in 1:L
                     #mul!(interKet, U1s[k], currentKet)
@@ -321,15 +370,18 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
                 else
                     mul!(newKet,U2,currentKet)
                 end
-                allKets[:,i] = newKet
+                if i == checkpoints[j-1]
+                    allKets[:,j] .= newKet
+                    j += 1
+                end
                 currentKet, newKet = newKet, currentKet
             end
         end
+
+        @timeit to "abs" finalKets .= abs2.(allKets)
     end
 
-    allKets = abs2.(allKets)
-
-    return allKets
+    return finalKets
 end
 
 "
@@ -417,7 +469,7 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     if BCs != "open" && BCs != "periodic"
         error("Boundary conditions must be 'open' or 'periodic' !")
     end
-    #nothing
+    n_size = min(nperiods, MAX_PERIODS)
     if t == 0.0
         numH2I = 0
     end
@@ -428,19 +480,20 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     js, hs =getJsAndHs(niters, L, J0, σj, J_dist, h0, σh, H_dist)
 
     
-    cors = zeros(L, nperiods+1)
-    allSpins = zeros(L, nperiods+1)
-    @timeit to "initializing allKets" allKets = zeros(2^L, nperiods+1)
+    cors = zeros(L, n_size+1)
+    allSpins = zeros(L, n_size+1)
+    @timeit to "initializing allKets" allKets = zeros(2^L, n_size+1)
     jIsingTensor = getIsingJtensor(L)
     thetaCoords = t == 0.0 ? nothing : getHeisenCoords(L)
     hTensor = getHtensor(L)            # more of the time
     basis = getBasis(L)
-
-    for i in 1:niters
-        u2 = IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; tCoords=thetaCoords, t=t, BCs=BCs, num_H2I=num_H2I)
-        allKets += autocorrelator(spins, basis, ε, u2, nperiods; num_H2I=num_H2I, d=diagonalization)
-        if i % (niters/10) == 0  && verbose == true
-            println("Finished ",i,"th iteration")
+    @timeit to "this stuff" begin
+        for i in 1:niters
+            u2 = IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; tCoords=thetaCoords, t=t, BCs=BCs, num_H2I=num_H2I)
+            allKets += autocorrelator(spins, basis, ε, u2, nperiods; num_H2I=num_H2I, d=diagonalization)
+            if i % (niters/10) == 0  && verbose == true
+                println("Finished ",i,"th iteration")
+            end
         end
     end
 

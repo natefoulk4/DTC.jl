@@ -10,7 +10,7 @@ function plotter(effAvgResult; which="worst")
         allres, spinmap = effAvgResult
         worst_qubit = findmin(mean(allres[:,1:2:end,:], dims=(2,3))[:])[2]
         this_qubit = which == "worst" ? worst_qubit : which
-
+        
         if typeof(this_qubit) == Int
             realres = allres[this_qubit,:]
         elseif lowercase(which) == "average"
@@ -32,7 +32,7 @@ function plotter(effAvgResult; which="worst")
     plot(realres, opacity=0.5, xscale=:log10, legend=false)
     plot!(collect(1:2:nperiods),realres[1:2:nperiods])
     p1 = plot!([1; collect(2:2:nperiods)],[-1.0 ; realres[2:2:nperiods]], title = string("Qubit #",this_qubit))
-    p21 = plot(res, yscale =:log10, ylims=(0.1,350), legend=false)
+    p21 = plot(res, yscale =:log10, ylims=(0.9,350), legend=false)
     p3 = heatmap(spinmap[:,1:30], c=:viridis, clims=(-1,1))
     howitsgoing = nperiods < 1030 ? ((nperiods-29):nperiods) : 1001:1030
     p4 = heatmap(collect(howitsgoing), collect(1:L), spinmap[:,howitsgoing], c=:viridis, clims=(-1,1))#print(spinmap[:,1001:1030])
@@ -58,7 +58,7 @@ function writeAutoCor(filename, output::Tuple)
         write(f, Int64(size(spinmap)[1]))
         write(f, Int64(size(spinmap)[2]))
         for i in eachindex(spinmap)
-            write(f, Float64(spinmap[i]))
+            write(f, Float64(spinmap[i])) 
         end
 
     end

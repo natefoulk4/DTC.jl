@@ -26,7 +26,7 @@ function logIntRange(start, stop; length)
     #println("we cross the value crossover after the ",valCross,"th element")
     newStart = max(slopeCross, valCross)
     #println(1/((stop/start)/(length-1) - 1))
-    linPart= Int.(range(start, start+newStart-1))
+    linPart= Int.(collect(start:start+newStart-1))
     logPart= Int.(round.(floatRange[newStart+1:end]))
     return [linPart;  logPart]
 end

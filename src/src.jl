@@ -488,12 +488,9 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     basis = getBasis(L)
     @timeit to "this stuff" begin
         for i in 1:niters
-            if i % (niters/10) == 0 && verbose
-                println(i)
-            end
             u2 = IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; tCoords=thetaCoords, t=t, BCs=BCs, num_H2I=num_H2I)
             allKets += autocorrelator(spins, basis, ε, u2, nperiods; num_H2I=num_H2I, d=diagonalization)
-            if i % (niters/10) == 0  && verbose == true
+            if i % (niters/10) == 0  && verbose
                 println("Finished ",i,"th iteration")
             end
         end

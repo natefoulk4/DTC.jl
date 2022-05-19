@@ -333,13 +333,12 @@ Simulate the dynamics of a DTC for a given instance of disorder. Take initial st
                 allKets[:,1] .= currentKet
             end
             @timeit to "U2 diag muls/saving results" begin
-                j = 2
-                for i in 2:N+1
-                    currentKet .=  vals .* currentKet
-                    if i == checkpoints[j-1]
-                        allKets[:,j] .= currentKet
-                        j += 1
-                    end
+                last_ind = 1
+                for j in 2:nsize+1
+                    pers = checkpoints[j-1] - last_ind
+                    currentKet .=   currentKet .* (vals.^pers)
+                    allKets[:,j] .= currentKet
+                    last_ind = checkpoints[j-1]
                 end
             end 
 
@@ -489,6 +488,9 @@ Exact same as autocorrelator, except average over ``niters`` simulations. Return
     basis = getBasis(L)
     @timeit to "this stuff" begin
         for i in 1:niters
+            if i % (niters/10) == 0 && verbose
+                println(i)
+            end
             u2 = IsingefficU2(Hspace,  hs[i,:] ,  js[i,:], jIsingTensor, hTensor; tCoords=thetaCoords, t=t, BCs=BCs, num_H2I=num_H2I)
             allKets += autocorrelator(spins, basis, ε, u2, nperiods; num_H2I=num_H2I, d=diagonalization)
             if i % (niters/10) == 0  && verbose == true

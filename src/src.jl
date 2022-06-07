@@ -391,6 +391,9 @@ function getJsAndHs(niters, L, J0, σj, J_dist, h0, σh, h_dist)
     js = zeros(niters, L)
     M = 8
     discrete_Jrange = J0 .+ (σj .* cos.(pi*collect(0:M-1)/(M-1)))
+	if lowercase(J_dist) == "discrete" && σj >= J0
+		error("for a discrete range, avoid negative js.")
+	end
 
     for i in eachindex(hs)
         if σh > 0.0
@@ -410,9 +413,9 @@ function getJsAndHs(niters, L, J0, σj, J_dist, h0, σh, h_dist)
     for i in eachindex(js)
         if σj > 0.0
             if lowercase(J_dist) == "normal"
-                js[i] = rand(Normal(J0, σj))
+				js[i] = rand(truncated(Normal(J0, σj), 0.0, Inf))
             elseif lowercase(J_dist) == "uniform"
-                js[i] = rand(Uniform(J0-σj, J0+σj))
+				js[i] = rand(Uniform(max(0.0,J0-σj), J0+σj))
             elseif lowercase(J_dist) == "discrete"
                 js[i] = rand(discrete_Jrange)
             else

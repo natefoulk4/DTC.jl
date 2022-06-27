@@ -4,7 +4,7 @@ using LinearAlgebra, Statistics, Distributions, SparseArrays, TimerOutputs, Plot
 
 export autocorrelator, effAvgAutoCor, plotter, LsrsOverParamRange, readArray, writeArray, readAutoCor, writeAutoCor, binToBase10, base10ToBin, levelspacing, avgLevelSpacings, U1, matrix_density, to, MAX_PERIODS, logRange, logIntRange
 
-export getFig1Data, getFig2Data, getFig3Data, getFig4Data, getFig5Data, getFig6Data, getFig7Data, Figure1and2, Figure3and4, Figure5, Figure6
+export getFig1Data, getFig2Data, getFig3Data, getFig4Data, getFig5Data, getFig6Data, getFig7Data, Figure1and2, Figure3and4, Figure5, Figure6, Figure7
 
 const to = TimerOutput()
 

@@ -87,7 +87,7 @@ function getFig5Data()
     xs = zeros(xNum)
     ys = zeros(yNum)
     data = zeros(xNum,yNum,2)
-    εs, σjs = range(0.0, 0.10, length=xNum), 10 .^ range(-2.5, 2.0, length=yNum)
+    εs, σjs = range(0.0, 0.15, length=xNum), 10 .^ range(-2.5, 2.0, length=yNum)
 
     inits = [[1,0,0,0]];
     ns = [3];
@@ -110,12 +110,12 @@ function getFig6Data()
     xs = zeros(xNum)
     ys = zeros(yNum)
     data = zeros(xNum,yNum,2)
-    εs, σhs = range(0.0, 0.10, length=xNum), 10 .^ range(-2.5, 2.0, length=yNum)
+    εs, σhs = range(0.0, 0.15, length=xNum), 10 .^ range(-2.5, 2.0, length=yNum)
 
     inits = [[1,0,0,0]];
     ns = [3];
     nperiods = [200]; 
-    h0s = [1.5, 10000];
+    h0s = [5.0, 10000];
     ind = 0
     for (i,init) in enumerate(inits), n in ns, nperiod in nperiods, h0 in h0s
         ind = ind + 1
@@ -192,12 +192,12 @@ function Figure5(x,y,z)
     myPlots = Array{Any}(undef, 2)
     fo = ("serif", 25)
     yl = L"\varepsilon"
-    yt = [0,0.03,0.06,0.1]
+    yt = [0,0.05,0.10,0.15,0.20]
     xl = L"\sigma_J"
     xt = [10^(-2), 10^(-1), 10^(0), 10^(1), 10^(2)] #, [L"0", L"\frac{\pi}{4}", L"\frac{\pi}{2}", L"\frac{3\pi}{4}", L"\pi"])
 
-    myPlots[1] = contourf(x,y,z[:,:,1], colorbar=false, c=:thermal, levels=9, yticks=yt, xticks=xt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, title=L" J_0 = 5.0 ", tick_direction=:out)
-    myPlots[2] = contourf(x,y,z[:,:,2], colorbar=false, c=:thermal, levels=9, xticks=xt, yticks=yt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, title=L" J_0 = 10,\!000 ", tick_direction=:out)
+    myPlots[1] = contourf(x,y,z[:,:,1], colorbar=false, c=:thermal, levels=9, yticks=yt, xticks=xt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, xminorticks=10, title=L" J_0 = 5.0 ", tick_direction=:out)
+    myPlots[2] = contourf(x,y,z[:,:,2], colorbar=false, c=:thermal, levels=9, xticks=xt, yticks=yt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, xminorticks=10, title=L" J_0 = 10,\!000 ", tick_direction=:out)
 
     h1 = scatter([0,0], [0,1], zcolor=[0,3], clims=(0,1), label="", c=palette(:thermal,10), colorbar_title=L"Z_3(t)", colorbar_titlefont=("serif-roman", 20), tickfont=("times", 12), xlims=(1.0,1.1), framestyle=:none, axis=false, right_margin=5mm, left_margin=5mm)
 
@@ -209,16 +209,27 @@ function Figure6(x,y,z)
     myPlots = Array{Any}(undef, 2)
     fo = ("serif", 25)
     yl = L"\varepsilon"
-    yt = [0,0.03,0.06,0.1]
+    yt = [0,0.05,0.10,0.15]
     xl = L"\sigma_h"
     xt = [10^(-2), 10^(-1), 10^(0), 10^(1), 10^(2)]#, [L"10^{-2}", L"10^{-1}", L"10^0", L"10^{1}", L"10^{2}"])
 
-    myPlots[1] = contourf(x,y,z[:,:,1], colorbar=false, c=:thermal, levels=9, yticks=yt, xticks=xt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, title=L" h_0 = 1.5", tick_direction=:out)
-    myPlots[2] = contourf(x,y,z[:,:,2], colorbar=false, c=:thermal, levels=9, xticks=xt, yticks=yt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, title=L" h_0 = 10,\!000", tick_direction=:out)
+    myPlots[1] = contourf(x,y,z[:,:,1], colorbar=false, c=:thermal, levels=9, yticks=yt, xticks=xt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, xminorticks=10, title=L" h_0 = 5.0", tick_direction=:out)
+    myPlots[2] = contourf(x,y,z[:,:,2], colorbar=false, c=:thermal, levels=9, xticks=xt, yticks=yt, ylabel=yl, xlabel=xl, tickfont=("serif-roman",10), guidefont=fo, titlefont=fo, xscale=:log10, topmargin=5mm, left_margin=6mm, bottommargin=10mm, xminorticks=10, title=L" h_0 = 10,\!000", tick_direction=:out)
 
     h1 = scatter([0,0], [0,1], zcolor=[0,3], clims=(0,1), label="", c=palette(:thermal,10), colorbar_title=L"Z_3(t)", colorbar_titlefont=("serif-roman", 20), tickfont=("times", 12), xlims=(1.0,1.1), framestyle=:none, axis=false, right_margin=5mm, left_margin=5mm)
 
     l = @layout [a b c{0.04w}]
 
     return plot(myPlots..., h1, layout=l, size=(1000,500))
+end
+
+const t0s =  [9057, 84333, 841395, 5970353, 58884366, 311888958, 4070052394, 35026762691, 410109660875, 
+5004952959592]
+const ls =  collect(4:13)
+
+function Figure7()
+    yt = [10^4, 10^6, 10^8, 10^10, 10^12, 10^14]
+    yl = (10^2, 10^(14.5))
+    xt = collect(0.02:0.02:0.3)
+    return plot(1 ./ ls, t0s, marker=true, tickfont=font(12,"Times"), ylabel=string("Lifetime ",L"(T)"), xlabel=L"L^{-1}", guidefont=font(15,"serif-roman"), legend=false, size=(600,600), yticks=yt, xticks=xt, ylims=yl, yscale=:log10, framestyle=:box)
 end
